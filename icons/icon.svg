@@ -1,0 +1,16 @@
+<!-- Logistics Flow Studio - WarehouseTwin
+     Original app mark. Public-domain / MIT with the project.
+     Design: four stacked storage units (a 2x2 pallet grid) with one
+     highlighted "active" unit and a flow arrow. Hand-drawn geometry,
+     no third-party trademarks or logos. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="WarehouseTwin">
+  <rect x="0" y="0" width="512" height="512" rx="92" fill="#0f172a"/>
+  <!-- 2x2 storage units -->
+  <rect x="104" y="104" width="140" height="140" rx="26" fill="#38bdf8"/>
+  <rect x="268" y="104" width="140" height="140" rx="26" fill="#2dd4bf"/>
+  <rect x="104" y="268" width="140" height="140" rx="26" fill="#38bdf8"/>
+  <rect x="268" y="268" width="140" height="140" rx="26" fill="#38bdf8"/>
+  <!-- flow arrow across the grid -->
+  <path d="M150 338 C 210 300, 300 300, 356 340" fill="none" stroke="#f8fafc" stroke-width="16" stroke-linecap="round" opacity="0.85"/>
+  <path d="M356 340 l -30 -6 m 30 6 l -8 -30" fill="none" stroke="#f8fafc" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+</svg>

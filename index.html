@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Logistics Flow Studio — WarehouseTwin</title>
+  <meta name="description" content="A game-like, intuitive warehouse digital-twin simulator. Offline, installable PWA. Synthetic data, original assets." />
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ================= HEADER ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <!-- Inline, original SVG mark (matches icons/icon.svg) -->
+      <svg class="brand-mark" viewBox="0 0 512 512" width="34" height="34" aria-hidden="true">
+        <rect x="0" y="0" width="512" height="512" rx="92" fill="#0f172a"/>
+        <rect x="104" y="104" width="140" height="140" rx="26" fill="#38bdf8"/>
+        <rect x="268" y="104" width="140" height="140" rx="26" fill="#2dd4bf"/>
+        <rect x="104" y="268" width="140" height="140" rx="26" fill="#38bdf8"/>
+        <rect x="268" y="268" width="140" height="140" rx="26" fill="#38bdf8"/>
+        <path d="M150 338 C 210 300, 300 300, 356 340" fill="none" stroke="#f8fafc" stroke-width="16" stroke-linecap="round" opacity="0.85"/>
+        <path d="M356 340 l -30 -6 m 30 6 l -8 -30" fill="none" stroke="#f8fafc" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+      </svg>
+      <div class="brand-text">
+        <h1>Logistics Flow Studio</h1>
+        <p>WarehouseTwin — digital-twin simulator <span class="tag">synthetic data</span></p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="helpBtn" class="btn ghost" type="button" title="Show the quick guide">? Guide</button>
+      <button id="installBtn" class="btn primary" type="button" hidden title="Install as an offline app">Install app</button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN LAYOUT ================= -->
+  <main class="layout">
+    <!-- LEFT: palette + layout actions -->
+    <aside class="col left">
+      <section class="card">
+        <h2 class="card-title">Palette</h2>
+        <p class="hint">Click an item, then click the floor to place it. Drag to move. Select to edit.</p>
+        <div id="palette" class="palette"><!-- filled by app.js --></div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Layout</h2>
+        <div class="btn-grid">
+          <button id="saveBtn" class="btn" type="button" title="Save to this browser">Save</button>
+          <button id="loadBtn" class="btn" type="button" title="Load the saved layout">Load</button>
+          <button id="exportBtn" class="btn" type="button" title="Download the layout as JSON">Export</button>
+          <button id="importBtn" class="btn" type="button" title="Load a layout from a JSON file">Import</button>
+          <button id="clearBtn" class="btn danger" type="button" title="Remove all elements">Clear</button>
+          <button id="demoBtn" class="btn" type="button" title="Load the starter demo layout">Demo</button>
+        </div>
+        <input id="importInput" type="file" accept="application/json,.json" hidden />
+      </section>
+    </aside>
+
+    <!-- CENTER: canvas -->
+    <section class="col center">
+      <div class="canvas-toolbar">
+        <span id="modeBadge" class="badge">Mode: Select</span>
+        <span id="capBadge" class="badge muted">Positions: 0</span>
+        <span id="aisleBadge" class="badge ok">Aisle OK</span>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="floor" aria-label="Warehouse floor plan editor"></canvas>
+      </div>
+      <p id="statusLine" class="status-line">Ready. Place racks &amp; docks, pick a strategy, then run the simulation.</p>
+    </section>
+
+    <!-- RIGHT: properties + simulation -->
+    <aside class="col right">
+      <section class="card" id="propCard">
+        <h2 class="card-title">Properties</h2>
+        <div id="propPanel" class="prop-panel">
+          <p class="empty">Select an element to see its properties.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Simulation</h2>
+        <div class="field">
+          <label for="strategySelect">Slotting strategy</label>
+          <select id="strategySelect"></select>
+        </div>
+        <p id="strategyDesc" class="hint"></p>
+        <div class="field-row">
+          <div class="field">
+            <label for="seedInput">Seed</label>
+            <input id="seedInput" type="number" value="42" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label for="ordersInput">Orders</label>
+            <input id="ordersInput" type="number" value="200" min="1" step="10" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="skuInput">SKUs</label>
+            <input id="skuInput" type="number" value="80" min="1" step="10" />
+          </div>
+          <div class="field">
+            <label for="aislePreset">Min aisle (truck)</label>
+            <select id="aislePreset"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="aisleInput">Min working aisle (m)</label>
+          <input id="aisleInput" type="number" value="2.9" min="0.5" step="0.1" />
+        </div>
+        <button id="runBtn" class="btn primary wide" type="button">▶ Run simulation</button>
+        <div id="kpi" class="kpi"><!-- filled after a run --></div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ================= ONBOARDING OVERLAY ================= -->
+  <div id="onboard" class="overlay" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+      <h2 id="obTitle">Welcome to WarehouseTwin</h2>
+      <p class="ob-sub">A tiny, honest warehouse digital twin. Three steps and you are running.</p>
+      <ol class="ob-steps">
+        <li><strong>1 · Place racks &amp; docks.</strong> Click a palette item, then click the floor. Drag to move, keep a valid aisle between rack rows.</li>
+        <li><strong>2 · Pick a strategy.</strong> Choose Random or ABC 80/20 slotting on the right.</li>
+        <li><strong>3 · Run the sim.</strong> Hit Run to see throughput, pick travel and storage fill. Same seed → same result.</li>
+      </ol>
+      <p class="ob-note">All data is synthetic and seeded. Icons and code are original/open. Nothing is sent anywhere — it runs fully offline.</p>
+      <div class="ob-actions">
+        <label class="ob-skip"><input type="checkbox" id="onboardDont" /> Don't show this again</label>
+        <button id="onboardClose" class="btn primary" type="button">Let's go</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom tooltip + toast -->
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- Local scripts only. Load order matters: domain -> sim -> app. -->
+  <script src="domain.js"></script>
+  <script src="simulation.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
