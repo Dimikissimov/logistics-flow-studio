@@ -2,7 +2,7 @@
 
 WarehouseTwin is a small, honest **warehouse digital-twin simulator** you can play with in a browser. I built it to feel game-like and immediately usable: drop racks and dock doors onto a floor, pick a slotting strategy, hit **Run**, and watch the numbers move. It installs as an offline app and holds no company's IP — every icon and line of code here is original or permissively licensed, and every number is synthetic and seeded so you can reproduce it exactly.
 
-This repository is **Pass 1 (the foundation)** of a longer build. It is deliberately a clean, extensible base — the smart-advisor, comparison, standards and packaging features are mapped out in the roadmap below and stubbed with clear hooks in the code, not faked in the UI.
+This is a multi-pass build. **Pass 1 (the foundation)** and **Pass 2 (the decision-support layer)** are shipped; Passes 3–5 are mapped out in the roadmap below and left with clear hooks in the code, not faked in the UI.
 
 ## What it is
 
@@ -12,6 +12,15 @@ A single-page, no-build, no-framework PWA (Progressive Web App). Hand-written HT
 - **A real-ish domain model.** EUR1–EUR6 euro pallets with their actual dimensions, carton types, and honest storage-system characteristics (footprint density, selectivity, FIFO/LIFO, a relative cost index). See `docs/DOMAIN_NOTES.md` for the numbers and their sources.
 - **A seeded, deterministic simulation.** It builds a synthetic order stream, slots SKUs into your layout using **Random** or **ABC 80/20** slotting, simulates picking over the floor you drew, and reports live KPIs: throughput (orders/hr), average pick travel (m/order), storage fill %, and pallet positions used. The same seed always gives the same result.
 - **Save / load / share.** Layouts persist in your browser and can be exported and imported as plain JSON.
+
+### Pass 2 — decision support (new)
+
+Four features that help you reason about a layout, all running offline on the same deterministic simulation:
+
+- **Heuristic advisor.** A transparent rule engine (`advisor.js`) — *informed by operations-research and warehousing best practice, not a trained or black-box model*. It returns a ranked list of suggestions, and each one states the **finding**, the **principle** behind it, and an **estimated impact** measured with the real simulation where possible (e.g. "switching to ABC 80/20 is estimated to cut average pick travel ~26%"). Rules cover slotting strategy, the ABC golden zone, DIN 15185 aisle widths, dock/staging placement, and storage over-/under-utilisation.
+- **Comparative A/B predictor.** Pick two configurations (e.g. Random vs ABC, or current vs optimised layout); it runs the sim twice at the same seed, shows the KPI deltas side by side, and names the better config in plain language. Deterministic.
+- **Spatial-layout optimiser.** A one-click, deterministic "golden-zone" heuristic (`optimizer.js`) that proposes pulling storage closer to the outbound dock while keeping every aisle valid. It **previews** the move as dashed ghosts on the floor and shows the predicted KPI improvement via the sim — you accept or discard. It never mutates your layout until you apply it.
+- **German-standards panel.** A collapsible reference (ASR A1.8, DIN 15185, EN 15512, EPAL/DIN EN 13698, VDI 2510/3564, DGUV rules) with one line each on what the standard governs and how the app aligns — plus the **live DIN 15185 aisle check** as a concrete example. It carries a bold disclaimer that this is *guidance-aligned, not a certification or a legal-compliance guarantee.*
 
 ## Design philosophy
 
@@ -56,9 +65,10 @@ Getting it into the **Google Play Store** is a separate packaging step (a TWA wr
 
 ## Roadmap
 
-Pass 1 (this repo) is the foundation. Planned next:
+Passes 1 and 2 are shipped. Planned next:
 
-- **P2 — Advisor + comparative + standards panel.** A plain-language layout advisor, an A/B predictor that runs two configurations and diffs the KPIs, a spatial-layout optimiser that minimises pick travel, and a German-standards panel (DIN 15185 aisle checks and load notes — *informed by*, not certified). Hooks are already in `simulation.js` and `app.js`.
+- **P1 — Foundation. ✅ Done.** PWA shell, interactive canvas, domain model, seeded simulation, KPIs.
+- **P2 — Advisor + comparative + optimiser + standards panel. ✅ Done.** A heuristic (rule-based, explainable) layout advisor, an A/B predictor that runs two configurations and diffs the KPIs, a spatial-layout optimiser that pulls storage into the golden zone to cut pick travel, and a German-standards panel with a live DIN 15185 aisle check — all *informed by*, not certified. See `advisor.js`, `optimizer.js`, and the Pass 2 panels in the app.
 - **P3 — Domain depth.** The remaining storage systems (drive-in, double-deep, push-back, pallet-flow, mobile, cantilever, AS/RS, shuttle), carton/tote flow, and full material-flow chains (receive → put-away → replenish → pick → pack → ship) with push/pull semantics. New elements added to `domain.js` flow through the palette and simulation automatically.
 - **P4 — Android / TWA package.** Wrap the PWA with Bubblewrap into a signed AAB for the Play Store. Packaging only; see `PUBLISH_ANDROID.md`.
 - **P5 — LSP Planner.** A higher-level logistics-network / planning layer that consumes exported layouts.
