@@ -33,6 +33,7 @@
     },
     lastResult: null,
     drag: null, // {id, offsetX, offsetY, moved}
+    preview: null, // optimizer proposal: [{id,type,x,y,w,d}] shown as ghosts
   };
 
   // ---------------- DOM refs ----------------
@@ -73,28 +74,10 @@
     return null;
   }
 
-  // Aisle-width guard (informed by DIN 15185). Returns list of offending
-  // storage-element pairs whose facing gap is > 0 but < min aisle.
+  // Aisle-width guard (informed by DIN 15185). Delegates to the single
+  // shared definition in domain.js (also used by the advisor & optimizer).
   function aisleViolations() {
-    const min = state.config.minAisleMetres;
-    const st = state.elements.filter((e) => (ELEMENTS[e.type] || {}).category === "storage");
-    const out = [];
-    for (let i = 0; i < st.length; i++) {
-      for (let j = i + 1; j < st.length; j++) {
-        const a = st[i], b = st[j];
-        const oX = a.x < b.x + b.w && b.x < a.x + a.w;
-        const oY = a.y < b.y + b.d && b.y < a.y + a.d;
-        if (oX && oY) continue; // overlap (blocked elsewhere), not an aisle
-        if (oX && !oY) {
-          const gap = Math.max(a.y, b.y) - Math.min(a.y + a.d, b.y + b.d);
-          if (gap > 0 && gap * CELL_M < min - 1e-6) out.push({ a, b, gapM: gap * CELL_M });
-        } else if (oY && !oX) {
-          const gap = Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w);
-          if (gap > 0 && gap * CELL_M < min - 1e-6) out.push({ a, b, gapM: gap * CELL_M });
-        }
-      }
-    }
-    return out;
+    return D.aisleViolations(state.elements, state.config.minAisleMetres);
   }
 
   function ioPoint() {
@@ -208,6 +191,34 @@
     }
     ctx.restore();
 
+    // optimizer preview ghosts (proposed positions)
+    if (state.preview) {
+      ctx.save();
+      ctx.setLineDash([5, 3]);
+      ctx.lineWidth = 2;
+      for (const g of state.preview) {
+        const def = ELEMENTS[g.type];
+        if (!def || def.category !== "storage") continue;
+        const gx = g.x * cellPx, gy = g.y * cellPx, gw = g.w * cellPx, gh = g.d * cellPx;
+        roundRect(gx + 2, gy + 2, gw - 4, gh - 4, 6);
+        ctx.strokeStyle = COLORS.sel;
+        ctx.fillStyle = hexA(def.color, 0.1);
+        ctx.fill();
+        ctx.stroke();
+        // arrow from current position to proposed
+        const cur = state.elements.find((e) => e.id === g.id);
+        if (cur && (cur.x !== g.x || cur.y !== g.y)) {
+          const fx = (cur.x + cur.w / 2) * cellPx, fy = (cur.y + cur.d / 2) * cellPx;
+          const tx = (g.x + g.w / 2) * cellPx, ty = (g.y + g.d / 2) * cellPx;
+          ctx.beginPath();
+          ctx.moveTo(fx, fy);
+          ctx.lineTo(tx, ty);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
     // I/O marker
     const io = ioPoint();
     const ix = io.x * cellPx, iy = io.y * cellPx;
@@ -265,6 +276,7 @@
       ab.textContent = "Aisle OK";
       ab.className = "badge ok";
     }
+    updateStandardsLive();
   }
 
   // ================================================================
@@ -516,6 +528,212 @@
       `<div class="kpi-value">${value} <span class="kpi-unit">${unit}</span></div>` +
       "</div>"
     );
+  }
+
+  // ================================================================
+  // P2 FEATURES: advisor, optimizer, A/B compare, standards panel
+  // (advisor.js + optimizer.js do the maths; this wires them to the UI)
+  // ================================================================
+  function esc(str) {
+    return String(str).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+  function currentLayout() {
+    return { elements: state.elements, gridW: GRID_W, gridH: GRID_H, cell: CELL_M };
+  }
+
+  // ---- Advisor -----------------------------------------------------
+  function runAdvisor() {
+    readConfigFromUI();
+    const list = WT.advisor.analyze(currentLayout(), state.config);
+    const out = $("advisorOut");
+    if (!list.length) {
+      out.innerHTML = '<p class="empty">Place some elements, then analyze.</p>';
+      return;
+    }
+    out.innerHTML = list
+      .map(
+        (sug) =>
+          `<div class="adv-item ${sug.severity}">` +
+          `<div class="adv-head"><span class="adv-dot"></span><span class="adv-finding">${esc(sug.finding)}</span></div>` +
+          `<div class="adv-line"><span class="adv-k">Principle</span> ${esc(sug.principle)}</div>` +
+          `<div class="adv-line"><span class="adv-k">Est. impact</span> ${esc(sug.impact)}</div>` +
+          "</div>"
+      )
+      .join("");
+    const high = list.filter((x) => x.severity === "high").length;
+    status(`Advisor: ${list.length} suggestion(s)${high ? ", " + high + " high-priority" : ""}.`);
+  }
+
+  // ---- Optimizer ---------------------------------------------------
+  function deltaRow(label, before, after, unit, lowerIsBetter) {
+    const diff = after - before;
+    const pct = before !== 0 ? (diff / before) * 100 : 0;
+    let cls = "neutral";
+    if (lowerIsBetter === true) cls = diff < 0 ? "up" : diff > 0 ? "down" : "neutral";
+    else if (lowerIsBetter === false) cls = diff > 0 ? "up" : diff < 0 ? "down" : "neutral";
+    const sign = diff > 0 ? "+" : "";
+    return (
+      `<div class="dl-row"><span class="dl-k">${label}</span>` +
+      `<span class="dl-v">${before.toFixed(1)} → ${after.toFixed(1)} <span class="dl-u">${unit}</span></span>` +
+      `<span class="dl-pct ${cls}">${sign}${pct.toFixed(1)}%</span></div>`
+    );
+  }
+
+  function runOptimize() {
+    readConfigFromUI();
+    const opt = WT.optimizer.optimize(currentLayout(), state.config);
+    const out = $("optOut");
+    if (!opt.ok) {
+      out.innerHTML = '<p class="empty">Add storage and an outbound dock, then optimize.</p>';
+      state.preview = null;
+      render();
+      return;
+    }
+    if (opt.movedCount === 0 || !opt.improved) {
+      out.innerHTML = `<p class="opt-none">Already near-optimal for the golden zone — no beneficial move found (travel ${opt.before.avgPickTravelM.toFixed(1)} m/order).</p>`;
+      state.preview = null;
+      render();
+      return;
+    }
+    state.preview = opt.proposedElements;
+    render();
+    out.innerHTML =
+      '<div class="opt-delta">' +
+      deltaRow("Avg pick travel", opt.before.avgPickTravelM, opt.after.avgPickTravelM, "m/order", true) +
+      deltaRow("Throughput", opt.before.throughputOrdersPerHour, opt.after.throughputOrdersPerHour, "orders/hr", false) +
+      deltaRow("Storage fill", opt.before.storageFillPct, opt.after.storageFillPct, "%", null) +
+      "</div>" +
+      `<p class="hint">Dashed ghosts = ${opt.movedCount} storage element(s) proposed to move toward the dock (~${opt.travelDeltaPct.toFixed(0)}% less travel). Aisles kept valid.</p>` +
+      '<div class="prop-actions"><button id="optApply" class="btn primary" type="button">Apply</button><button id="optDiscard" class="btn" type="button">Discard</button></div>';
+    $("optApply").addEventListener("click", () => applyOptimize(opt));
+    $("optDiscard").addEventListener("click", discardOptimize);
+    status(`Optimizer preview: ~${opt.travelDeltaPct.toFixed(0)}% less pick travel. Apply or discard.`);
+  }
+
+  function applyOptimize(opt) {
+    for (const g of opt.proposedElements) {
+      const e = state.elements.find((x) => x.id === g.id);
+      if (e) { e.x = g.x; e.y = g.y; }
+    }
+    state.preview = null;
+    scheduleSave();
+    render();
+    renderProps();
+    runSimulation();
+    $("optOut").innerHTML = '<p class="opt-none">Applied. KPIs updated above.</p>';
+    toast("Optimized layout applied.");
+  }
+
+  function discardOptimize() {
+    state.preview = null;
+    render();
+    $("optOut").innerHTML = '<p class="empty">Discarded — layout unchanged.</p>';
+  }
+
+  // ---- A/B comparative predictor -----------------------------------
+  function buildAbControls() {
+    for (const id of ["abStratA", "abStratB"]) {
+      const selEl = $(id);
+      selEl.innerHTML = "";
+      Object.values(D.STRATEGIES).forEach((st) => {
+        const o = document.createElement("option");
+        o.value = st.id;
+        o.textContent = st.label;
+        selEl.appendChild(o);
+      });
+    }
+    $("abStratA").value = "random";
+    $("abStratB").value = "abc";
+  }
+
+  function abLayout(kind) {
+    if (kind === "optimized") {
+      const opt = WT.optimizer.optimize(currentLayout(), state.config);
+      return { elements: opt.proposedElements, gridW: GRID_W, gridH: GRID_H, cell: CELL_M };
+    }
+    return currentLayout();
+  }
+
+  function abLabel(strat, layoutKind) {
+    const st = (D.STRATEGIES[strat] || {}).label || strat;
+    return `${st} · ${layoutKind === "optimized" ? "optimized" : "current"} layout`;
+  }
+
+  function runCompare() {
+    readConfigFromUI();
+    const cfgA = Object.assign({}, state.config, { strategy: $("abStratA").value });
+    const cfgB = Object.assign({}, state.config, { strategy: $("abStratB").value });
+    const A = WT.sim.run(abLayout($("abLayoutA").value), cfgA);
+    const B = WT.sim.run(abLayout($("abLayoutB").value), cfgB);
+    const nameA = abLabel($("abStratA").value, $("abLayoutA").value);
+    const nameB = abLabel($("abStratB").value, $("abLayoutB").value);
+    const out = $("abOut");
+    if (!A.ok || !B.ok) {
+      out.innerHTML = '<p class="empty">Add storage first — both configs need pallet positions.</p>';
+      return;
+    }
+    const rows = [
+      ["Throughput", A.throughputOrdersPerHour, B.throughputOrdersPerHour, "orders/hr", "high"],
+      ["Avg pick travel", A.avgPickTravelM, B.avgPickTravelM, "m/order", "low"],
+      ["Storage fill", A.storageFillPct, B.storageFillPct, "%", "neutral"],
+    ];
+    let table =
+      `<table class="ab-table"><thead><tr><th></th><th>A</th><th>B</th></tr></thead><tbody>` +
+      `<tr class="ab-names"><td></td><td>${esc(nameA)}</td><td>${esc(nameB)}</td></tr>`;
+    for (const [label, av, bv, unit, better] of rows) {
+      let aCls = "", bCls = "";
+      if (better === "high") { if (av > bv) aCls = "win"; else if (bv > av) bCls = "win"; }
+      else if (better === "low") { if (av < bv) aCls = "win"; else if (bv < av) bCls = "win"; }
+      table += `<tr><td class="ab-k">${label} <span class="dl-u">${unit}</span></td>` +
+        `<td class="${aCls}">${av.toFixed(1)}</td><td class="${bCls}">${bv.toFixed(1)}</td></tr>`;
+    }
+    table += "</tbody></table>";
+    // Plain-language recommendation (primary criterion: lower pick travel).
+    const better = A.avgPickTravelM <= B.avgPickTravelM ? { r: A, n: nameA, o: B, on: nameB } : { r: B, n: nameB, o: A, on: nameA };
+    const pct = better.o.avgPickTravelM > 0 ? ((better.o.avgPickTravelM - better.r.avgPickTravelM) / better.o.avgPickTravelM) * 100 : 0;
+    const rec = pct < 0.5
+      ? `<strong>${esc(nameA)}</strong> and <strong>${esc(nameB)}</strong> are effectively tied on pick travel at seed ${state.config.seed}.`
+      : `<strong>${esc(better.n)}</strong> is the better choice — about ${pct.toFixed(0)}% less pick travel and higher throughput than ${esc(better.on)} (seed ${state.config.seed}).`;
+    out.innerHTML = table + `<p class="ab-rec">${rec}</p>`;
+    status("Compared A vs B (deterministic, same seed).");
+  }
+
+  // ---- German-standards panel --------------------------------------
+  const STANDARDS = [
+    { code: "ASR A1.8", gov: "Technical Rules for Workplaces — traffic routes and walkways.", app: "Aisle-width guidance keeps truck and pedestrian routes workable." },
+    { code: "DIN 15185", gov: "Safety of storage installations; working-aisle design for industrial trucks.", app: "The live minimum-aisle check flags rack rows placed too close (status below)." },
+    { code: "EN 15512", gov: "Steel static storage systems — adjustable pallet racking; structural design principles.", app: "Models racking capacity and levels. It does NOT perform structural/load design." },
+    { code: "EPAL / DIN EN 13698", gov: "Production specification for the flat wooden Euro (EUR) pallet.", app: "EUR1–EUR6 real dimensions are built into the domain model." },
+    { code: "VDI 2510 / VDI 3564", gov: "VDI 2510: automated guided vehicle (AGV) systems. VDI 3564: fire-protection design for high-bay / automated warehouses.", app: "Referenced for the AGV/AS-RS material-flow modelling planned in P3/P5." },
+    { code: "DGUV rules", gov: "German statutory accident-insurance rules for workplace and warehouse safety.", app: "General safety framing; this app is a planning aid, not a safety assessment." },
+  ];
+
+  function buildStandards() {
+    const wrap = $("stdList");
+    if (!wrap) return;
+    wrap.innerHTML = STANDARDS.map(
+      (st) =>
+        '<div class="std-item">' +
+        `<div class="std-code">${esc(st.code)}</div>` +
+        `<div class="std-gov">${esc(st.gov)}</div>` +
+        `<div class="std-app"><span class="std-applabel">How this app aligns:</span> ${esc(st.app)}</div>` +
+        "</div>"
+    ).join("");
+    updateStandardsLive();
+  }
+
+  function updateStandardsLive() {
+    const el = $("stdAisleLive");
+    if (!el) return;
+    const v = aisleViolations();
+    if (v.length) {
+      const narrow = Math.min.apply(null, v.map((x) => x.gapM));
+      el.textContent = `Live DIN 15185 check: ${v.length} aisle(s) below the ${state.config.minAisleMetres} m minimum (narrowest ${narrow.toFixed(1)} m).`;
+      el.className = "std-live warn";
+    } else {
+      el.textContent = `Live DIN 15185 check: all rack-row aisles meet the ${state.config.minAisleMetres} m minimum.`;
+      el.className = "std-live ok";
+    }
   }
 
   // ================================================================
@@ -837,6 +1055,9 @@
     });
     $("demoBtn").addEventListener("click", demoLayout);
     $("runBtn").addEventListener("click", runSimulation);
+    $("adviseBtn").addEventListener("click", runAdvisor);
+    $("optimizeBtn").addEventListener("click", runOptimize);
+    $("compareBtn").addEventListener("click", runCompare);
     $("helpBtn").addEventListener("click", () => { $("onboard").hidden = false; });
     $("onboardClose").addEventListener("click", closeOnboard);
   }
@@ -844,6 +1065,8 @@
   function boot() {
     buildPalette();
     buildConfigControls();
+    buildAbControls();
+    buildStandards();
     wireButtons();
     pushConfigToUI();
     resizeCanvas();
@@ -868,21 +1091,15 @@
   }
 
   /* ==================================================================
-   * TODO HOOKS FOR LATER PASSES (P2-P5)
+   * TODO HOOKS FOR LATER PASSES
    * ------------------------------------------------------------------
-   * P2 - AI advisor:      read `state.lastResult` + layout stats and
-   *                       surface plain-language suggestions. Mount a
-   *                       new right-column <section class="card"> here.
-   * P2 - A/B comparative: call WT.sim.run() with two configs (this file
-   *                       already keeps `state.config` immutable per run)
-   *                       and diff KPIs side by side.
-   * P2 - Layout optimiser: perturb element x/y (respect overlap +
-   *                       aisleViolations()) minimising avgPickTravelM.
-   * P2 - Standards panel:  aisleViolations() is the first check; add a
-   *                       German-standards panel (DIN 15185 aisle, load
-   *                       notes) - clearly "informed by", not certified.
+   * P2 - DONE: heuristic advisor (advisor.js -> runAdvisor), spatial
+   *      optimizer (optimizer.js -> runOptimize/applyOptimize), A/B
+   *      comparative predictor (runCompare), German-standards panel
+   *      (buildStandards + live D.aisleViolations check).
    * P3 - Domain depth:     new ELEMENTS entries in domain.js appear in
-   *                       the palette automatically; add flow-chain sim.
+   *                       the palette, sim, advisor & optimizer with no
+   *                       further UI change; add material-flow chains.
    * P4 - Android/TWA:      packaging only (Bubblewrap) - see
    *                       PUBLISH_ANDROID.md. No app code change needed.
    * P5 - LSP Planner:      a higher-level network/planning layer that

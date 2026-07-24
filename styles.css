@@ -303,3 +303,80 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* =====================================================================
+ * P2 components: advisor, optimizer, A/B compare, standards panel
+ * ===================================================================== */
+
+/* ---- Advisor ---- */
+.advisor-out { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.advisor-out .empty { color: var(--text-dim); font-size: 0.8rem; }
+.adv-item {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-dim);
+  border-radius: 9px;
+  background: var(--surface-2);
+  padding: 9px 11px;
+}
+.adv-item.high { border-left-color: var(--danger); }
+.adv-item.medium { border-left-color: var(--warn); }
+.adv-item.low { border-left-color: var(--accent); }
+.adv-item.good { border-left-color: var(--ok); }
+.adv-head { display: flex; align-items: baseline; gap: 8px; }
+.adv-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; margin-top: 4px; }
+.adv-item.high .adv-dot { background: var(--danger); }
+.adv-item.medium .adv-dot { background: var(--warn); }
+.adv-item.low .adv-dot { background: var(--accent); }
+.adv-item.good .adv-dot { background: var(--ok); }
+.adv-finding { font-weight: 650; font-size: 0.82rem; }
+.adv-line { font-size: 0.76rem; color: var(--text-dim); margin-top: 5px; }
+.adv-k {
+  display: inline-block; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em;
+  font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--accent) 16%, transparent);
+  padding: 0 6px; border-radius: 5px; margin-right: 5px;
+}
+
+/* ---- Optimizer / delta rows ---- */
+.opt-out { margin-top: 10px; }
+.opt-out .empty, .opt-none { color: var(--text-dim); font-size: 0.8rem; }
+.opt-delta { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.dl-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: baseline; font-size: 0.8rem; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.dl-k { color: var(--text-dim); }
+.dl-v { font-family: var(--mono); font-size: 0.78rem; }
+.dl-u { color: var(--text-dim); font-size: 0.68rem; }
+.dl-pct { font-family: var(--mono); font-weight: 700; font-size: 0.78rem; text-align: right; min-width: 56px; }
+.dl-pct.up { color: var(--ok); }
+.dl-pct.down { color: var(--danger); }
+.dl-pct.neutral { color: var(--text-dim); }
+
+/* ---- A/B compare ---- */
+.ab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.ab-side { display: flex; flex-direction: column; gap: 6px; }
+.ab-title { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.ab-out { margin-top: 10px; }
+.ab-out .empty { color: var(--text-dim); font-size: 0.8rem; }
+.ab-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.ab-table th, .ab-table td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--border); }
+.ab-table th:first-child, .ab-table td:first-child { text-align: left; }
+.ab-table thead th { color: var(--text-dim); font-size: 0.72rem; font-weight: 600; }
+.ab-table .ab-names td { font-size: 0.68rem; color: var(--text-dim); font-weight: 600; }
+.ab-table .ab-k { color: var(--text-dim); }
+.ab-table td.win { color: var(--ok); font-weight: 700; }
+.ab-table td { font-family: var(--mono); }
+.ab-table td.ab-k, .ab-table .ab-names td { font-family: var(--font); }
+.ab-rec { font-size: 0.8rem; margin-top: 10px; padding: 9px 11px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); }
+
+/* ---- German-standards panel ---- */
+#stdDetails { }
+.std-summary { font-size: 0.9rem; font-weight: 650; cursor: pointer; padding: 2px 0; }
+.std-summary em { font-style: italic; color: var(--text-dim); font-weight: 500; }
+.std-live { font-size: 0.76rem; margin: 10px 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); }
+.std-live.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.std-live.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.std-list { display: flex; flex-direction: column; gap: 8px; }
+.std-item { border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; background: var(--surface-2); }
+.std-code { font-weight: 700; font-size: 0.8rem; }
+.std-gov { font-size: 0.76rem; color: var(--text-dim); margin-top: 3px; }
+.std-app { font-size: 0.74rem; margin-top: 5px; }
+.std-applabel { font-weight: 700; color: var(--accent); }
+.std-disclaimer { font-size: 0.75rem; margin-top: 12px; padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--warn) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }

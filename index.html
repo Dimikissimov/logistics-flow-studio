@@ -118,6 +118,58 @@
         <button id="runBtn" class="btn primary wide" type="button">▶ Run simulation</button>
         <div id="kpi" class="kpi"><!-- filled after a run --></div>
       </section>
+
+      <!-- P2: heuristic advisor -->
+      <section class="card">
+        <h2 class="card-title">Advisor</h2>
+        <p class="hint">A <strong>heuristic advisor</strong> informed by operations-research &amp; warehousing best practice — a transparent rule engine, <em>not</em> a trained/black-box model. Impacts are estimated with the same simulation.</p>
+        <button id="adviseBtn" class="btn primary wide" type="button">Analyze layout</button>
+        <div id="advisorOut" class="advisor-out"><p class="empty">Run an analysis to see ranked, explained suggestions.</p></div>
+      </section>
+
+      <!-- P2: spatial-layout optimizer -->
+      <section class="card">
+        <h2 class="card-title">Layout optimizer</h2>
+        <p class="hint">Golden-zone heuristic: pulls storage toward the outbound dock, keeping aisles valid. Previews the change and the predicted KPIs before you apply it.</p>
+        <button id="optimizeBtn" class="btn primary wide" type="button">Optimize (preview)</button>
+        <div id="optOut" class="opt-out"><p class="empty">Preview shows dashed ghosts on the floor; nothing changes until you Apply.</p></div>
+      </section>
+
+      <!-- P2: comparative A/B predictor -->
+      <section class="card">
+        <h2 class="card-title">Compare A/B</h2>
+        <p class="hint">Runs the sim twice (same seed → deterministic) and diffs the KPIs.</p>
+        <div class="ab-grid">
+          <div class="ab-side">
+            <span class="ab-title">Config A</span>
+            <select id="abStratA" aria-label="Config A strategy"></select>
+            <select id="abLayoutA" aria-label="Config A layout">
+              <option value="current">Current layout</option>
+              <option value="optimized">Optimized layout</option>
+            </select>
+          </div>
+          <div class="ab-side">
+            <span class="ab-title">Config B</span>
+            <select id="abStratB" aria-label="Config B strategy"></select>
+            <select id="abLayoutB" aria-label="Config B layout">
+              <option value="current">Current layout</option>
+              <option value="optimized">Optimized layout</option>
+            </select>
+          </div>
+        </div>
+        <button id="compareBtn" class="btn primary wide" type="button">Compare</button>
+        <div id="abOut" class="ab-out"><p class="empty">Pick two configs and compare.</p></div>
+      </section>
+
+      <!-- P2: German-standards panel (collapsible) -->
+      <section class="card">
+        <details id="stdDetails">
+          <summary class="std-summary">German standards this app is <em>informed by</em></summary>
+          <p id="stdAisleLive" class="std-live">Live DIN 15185 check: —</p>
+          <div id="stdList" class="std-list"><!-- filled by app.js --></div>
+          <p class="std-disclaimer"><strong>This is a guidance-aligned design aid, NOT a certification or a legal-compliance guarantee.</strong> WarehouseTwin references these standards to keep layouts sensible; it does not certify conformance. Verify any real design with the current official texts and a qualified professional.</p>
+        </details>
+      </section>
     </aside>
   </main>
 
@@ -143,9 +195,12 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Local scripts only. Load order matters: domain -> sim -> app. -->
+  <!-- Local scripts only. Load order: domain -> sim -> optimizer -> advisor -> app.
+       (advisor uses the optimizer; both use domain + sim.) -->
   <script src="domain.js"></script>
   <script src="simulation.js"></script>
+  <script src="optimizer.js"></script>
+  <script src="advisor.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
