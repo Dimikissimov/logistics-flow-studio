@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ruff_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Node / packaging scratch (P4 TWA work lands elsewhere)
+node_modules/
+*.log
+
+# Local exports (user layouts)
+warehousetwin-layout.json
