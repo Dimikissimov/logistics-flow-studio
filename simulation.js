@@ -271,7 +271,9 @@
     };
   }
 
-  WT.sim = { run, mulberry32, PARAMS };
+  // Expose ioPointOf so the advisor & optimizer anchor to the exact same
+  // I/O point the simulation uses.
+  WT.sim = { run, mulberry32, PARAMS, ioPointOf };
 
   /* ==================================================================
    * TODO (P2 - AI advisor / comparative predictor):

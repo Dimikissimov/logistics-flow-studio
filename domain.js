@@ -191,6 +191,35 @@
     return PALLETS.find((p) => p.id === id) || PALLETS[0];
   }
 
+  /* ------------------------------------------------------------------
+   * Aisle-width guard (informed by DIN 15185). Shared by the canvas
+   * editor (app.js), the advisor and the optimizer so there is ONE
+   * definition of "too narrow". Returns the storage-element pairs whose
+   * facing gap is > 0 but < the minimum working aisle. `gap == 0`
+   * (racks back-to-back) is fine; overlap is handled elsewhere.
+   * ------------------------------------------------------------------ */
+  function aisleViolations(elements, minAisleMetres) {
+    const min = minAisleMetres;
+    const st = (elements || []).filter((e) => (ELEMENTS[e.type] || {}).category === "storage");
+    const out = [];
+    for (let i = 0; i < st.length; i++) {
+      for (let j = i + 1; j < st.length; j++) {
+        const a = st[i], b = st[j];
+        const oX = a.x < b.x + b.w && b.x < a.x + a.w;
+        const oY = a.y < b.y + b.d && b.y < a.y + a.d;
+        if (oX && oY) continue; // overlap, not an aisle
+        if (oX && !oY) {
+          const gap = Math.max(a.y, b.y) - Math.min(a.y + a.d, b.y + b.d);
+          if (gap > 0 && gap * METRES_PER_CELL < min - 1e-6) out.push({ a, b, gapM: gap * METRES_PER_CELL });
+        } else if (oY && !oX) {
+          const gap = Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w);
+          if (gap > 0 && gap * METRES_PER_CELL < min - 1e-6) out.push({ a, b, gapM: gap * METRES_PER_CELL });
+        }
+      }
+    }
+    return out;
+  }
+
   WT.domain = {
     METRES_PER_CELL,
     PALLETS,
@@ -200,6 +229,7 @@
     AISLE,
     elementCapacity,
     palletById,
+    aisleViolations,
     // Palette order shown in the UI.
     paletteOrder: [
       "selective-racking", "block-stack",
