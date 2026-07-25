@@ -2,7 +2,7 @@
 
 WarehouseTwin is a small, honest **warehouse digital-twin simulator** you can play with in a browser. I built it to feel game-like and immediately usable: drop racks and dock doors onto a floor, pick a slotting strategy, hit **Run**, and watch the numbers move. It installs as an offline app and holds no company's IP — every icon and line of code here is original or permissively licensed, and every number is synthetic and seeded so you can reproduce it exactly.
 
-This is a multi-pass build. **Pass 1 (the foundation)** and **Pass 2 (the decision-support layer)** are shipped; Passes 3–5 are mapped out in the roadmap below and left with clear hooks in the code, not faked in the UI.
+This is a multi-pass build. **Pass 1 (the foundation)**, **Pass 2 (the decision-support layer)** and **Pass 3 (domain depth)** are shipped; Passes 4–5 are mapped out in the roadmap below and left with clear hooks in the code, not faked in the UI.
 
 ## What it is
 
@@ -20,7 +20,19 @@ Four features that help you reason about a layout, all running offline on the sa
 - **Heuristic advisor.** A transparent rule engine (`advisor.js`) — *informed by operations-research and warehousing best practice, not a trained or black-box model*. It returns a ranked list of suggestions, and each one states the **finding**, the **principle** behind it, and an **estimated impact** measured with the real simulation where possible (e.g. "switching to ABC 80/20 is estimated to cut average pick travel ~26%"). Rules cover slotting strategy, the ABC golden zone, DIN 15185 aisle widths, dock/staging placement, and storage over-/under-utilisation.
 - **Comparative A/B predictor.** Pick two configurations (e.g. Random vs ABC, or current vs optimised layout); it runs the sim twice at the same seed, shows the KPI deltas side by side, and names the better config in plain language. Deterministic.
 - **Spatial-layout optimiser.** A one-click, deterministic "golden-zone" heuristic (`optimizer.js`) that proposes pulling storage closer to the outbound dock while keeping every aisle valid. It **previews** the move as dashed ghosts on the floor and shows the predicted KPI improvement via the sim — you accept or discard. It never mutates your layout until you apply it.
-- **German-standards panel.** A collapsible reference (ASR A1.8, DIN 15185, EN 15512, EPAL/DIN EN 13698, VDI 2510/3564, DGUV rules) with one line each on what the standard governs and how the app aligns — plus the **live DIN 15185 aisle check** as a concrete example. It carries a bold disclaimer that this is *guidance-aligned, not a certification or a legal-compliance guarantee.*
+- **German-standards panel.** A collapsible reference (ASR A1.8, DIN 15185, EN 15512, EPAL/DIN EN 13698, VDI 2510, VDI 3564, DIN EN 619, DGUV rules) with one line each on what the standard governs and how the app aligns — plus the **live DIN 15185 aisle check** as a concrete example. It carries a bold disclaimer that this is *guidance-aligned, not a certification or a legal-compliance guarantee.*
+
+### Pass 3 — domain depth (new)
+
+The full storage-systems palette, material-flow chains, and inventory dynamics — still one screen, still fully offline and deterministic:
+
+- **Twelve storage systems**, each with honest, sim-relevant characteristics (footprint density, pallet positions, selectivity %, FIFO/LIFO rotation, relative cost, and a handling delta or machine cycle the simulation actually charges): selective racking, block-stack, **drive-in** (deep-lane LIFO), **double-deep**, **push-back** (LIFO), **pallet-flow** (true FIFO, presented pick faces), **carton-flow** (fast small-parts pick faces), **mobile/compact racking**, **cantilever** (long goods), **AS/RS crane aisle** and **shuttle system** (goods-to-person machine cycles instead of walking), and a **mezzanine pick level**. Distinct original canvas glyphs for each.
+- **Material-flow chains.** Conveyors, staging, push/pull stations and the new **pack station** connect into validated chains (dock → staging → put-away → storage → replen → pick → pack → ship). Flow arrows show what is connected; broken chains warn (dangling conveyor, outbound dock with no pick feed, orphan stations); connected chains genuinely help in the sim (covered tours drop the return leg, chained legs save handling, chained receiving shortens pull lead time) while broken chains force manual travel.
+- **Push vs pull, simulated.** A per-run toggle: push replenishes pick faces to a periodic forecast (with seeded forecast noise → overstock returns *and* dry spells between reviews); pull replenishes on consumption via reorder points and lead times. New KPIs: stockout % of lines, overstock returns, average face stock. Simplifications documented in `docs/DOMAIN_NOTES.md`.
+- **Zone / batch / wave picking** joined random and ABC (zone = resident pickers per area + consolidation; batch = shared tours + sort; wave = timed release, bigger batches + setup). The A/B panel compares any two of the five — and is honest when shorter tours *don't* win on labour.
+- **Unit-load catalog.** More cartons plus reusable totes, with **cartons-per-pallet math per EUR pallet type**; storage capacity is shown in pallet positions *and* estimated cartons.
+- **One-click preset: "Industrial MRO distributor (illustrative)"** — a large layout (rack rows, deep-lane blocks, AS/RS aisle + shuttle, conveyor spine, push/pull stations, pack station, both docks) with an 80/20-skewed demand profile. *Independent, illustrative, based on public information about the industry segment — not affiliated with or endorsed by Würth or any real company.*
+- **Advisor grew new rules**: broken-chain findings, LIFO-share vs FIFO-critical SKUs, carton-flow for high-velocity small parts, an AS/RS-needs-a-takeaway-conveyor check, and a **measured push-vs-pull comparison** using the same sim.
 
 ## Design philosophy
 
@@ -65,11 +77,11 @@ Getting it into the **Google Play Store** is a separate packaging step (a TWA wr
 
 ## Roadmap
 
-Passes 1 and 2 are shipped. Planned next:
+Passes 1–3 are shipped. Planned next:
 
 - **P1 — Foundation. ✅ Done.** PWA shell, interactive canvas, domain model, seeded simulation, KPIs.
 - **P2 — Advisor + comparative + optimiser + standards panel. ✅ Done.** A heuristic (rule-based, explainable) layout advisor, an A/B predictor that runs two configurations and diffs the KPIs, a spatial-layout optimiser that pulls storage into the golden zone to cut pick travel, and a German-standards panel with a live DIN 15185 aisle check — all *informed by*, not certified. See `advisor.js`, `optimizer.js`, and the Pass 2 panels in the app.
-- **P3 — Domain depth.** The remaining storage systems (drive-in, double-deep, push-back, pallet-flow, mobile, cantilever, AS/RS, shuttle), carton/tote flow, and full material-flow chains (receive → put-away → replenish → pick → pack → ship) with push/pull semantics. New elements added to `domain.js` flow through the palette and simulation automatically.
+- **P3 — Domain depth. ✅ Done.** All twelve storage systems with sim-relevant characteristics (selectivity, FIFO/LIFO, handling deltas, goods-to-person cycles), validated material-flow chains with flow arrows and broken-chain warnings, simulated push-vs-pull pick-face inventory (stockouts vs overstock), zone/batch/wave picking, the carton/tote catalog with cartons-per-pallet math, and the illustrative MRO-distributor preset. Every model simplification is written down in `docs/DOMAIN_NOTES.md` — it remains a teaching twin, not a WMS.
 - **P4 — Android / TWA package.** Wrap the PWA with Bubblewrap into a signed AAB for the Play Store. Packaging only; see `PUBLISH_ANDROID.md`.
 - **P5 — LSP Planner.** A higher-level logistics-network / planning layer that consumes exported layouts.
 
