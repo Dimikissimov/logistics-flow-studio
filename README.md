@@ -105,4 +105,4 @@ All five passes are shipped:
 
 ## Licence
 
-MIT © 2026 Dimitres Kisimov. See [`LICENSE`](LICENSE).
+© 2026 Dimitres Kisimov — all rights reserved; published for portfolio review. See LICENSE.

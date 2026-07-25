@@ -4,7 +4,7 @@ WarehouseTwin ships **only original or permissively-licensed open assets**. Ther
 
 ## Code
 
-- All application code (`index.html`, `styles.css`, `app.js`, `domain.js`, `simulation.js`, `optimizer.js`, `advisor.js`, `sw.js`) is **original**, written for this project, and licensed under **MIT** (see `LICENSE`). The Pass 2 advisor (`advisor.js`) is a hand-written rule/heuristic engine — no trained model, no third-party ML libraries.
+- All application code (`index.html`, `styles.css`, `app.js`, `domain.js`, `simulation.js`, `optimizer.js`, `advisor.js`, `sw.js`) is **original**, written for this project — © 2026 Dimitres Kisimov, all rights reserved (see `LICENSE`). The Pass 2 advisor (`advisor.js`) is a hand-written rule/heuristic engine — no trained model, no third-party ML libraries.
 - The seeded PRNG in `simulation.js` is **mulberry32**, a widely published public-domain one-liner (no attribution required); implemented here from scratch.
 
 ## Icons & graphics
