@@ -2,6 +2,8 @@
 
 WarehouseTwin is a small, honest **warehouse digital-twin simulator** you can play with in a browser. I built it to feel game-like and immediately usable: drop racks and dock doors onto a floor, pick a slotting strategy, hit **Run**, and watch the numbers move. It installs as an offline app and holds no company's IP — every icon and line of code here is original or permissively licensed, and every number is synthetic and seeded so you can reproduce it exactly.
 
+![WarehouseTwin — the starter demo layout on the canvas floor plan, with the palette, properties panel and simulation controls](docs/img/warehousetwin.png)
+
 This is a multi-pass build, and all five passes are shipped: **Pass 1 (the foundation)**, **Pass 2 (the decision-support layer)**, **Pass 3 (domain depth)**, **Pass 4 (Android delivery + the demo/full tier gate)** and **Pass 5 (LSP Planner — the network-level planning game at [`lsp/`](lsp/), linked from the header)**.
 
 ## What it is
@@ -43,6 +45,8 @@ The full storage-systems palette, material-flow chains, and inventory dynamics �
 
 A second, self-contained app at [`lsp/`](lsp/) — **LSP Planner** — that zooms out from one warehouse to the whole logistics network. Same rules as everything else here: offline, deterministic, synthetic, original assets, honest labels.
 
+![LSP Planner — Level 1 starter network on the map: factory, central DC and four customer zones connected by lanes](docs/img/lsp-planner.png)
+
 - **An interactive network map** on an abstract grid region (1 cell = 10 km — *not* any real country or company network). Place factories, central DCs, regional DCs, cross-docks and customer zones; draw lanes between sites (click A, then B); drag to move, select to edit, delete, save/load per level, JSON export/import.
 - **Two honest transport modes per lane.** Full truckload pays per truck (`ceil(flow / 15 t)` weekly trucks — a thin flow still pays a whole truck, which is exactly the lesson), Parcel/LTL pays per tonne-km. Each stocking DC has a **push vs pull replenishment toggle**.
 - **A deterministic, seeded evaluation engine** (`lsp/lsp-engine.js`, pure — it runs identically in the browser and in Node). Customer zones carry seeded weekly demand (mean + variability); one click computes weekly transport cost, facility fixed + handling cost, **holding cost with safety stock via the textbook base-stock / square-root risk-pooling formula** (`SS = z·√LT·σ_pooled`), achieved service against a lead-time target, and a **CO2 estimate** with its per-mode assumptions stated. Same design → identical numbers, every time.
@@ -70,6 +74,7 @@ Details and citations live in [`docs/DOMAIN_NOTES.md`](docs/DOMAIN_NOTES.md).
 It's static — no server or build step required.
 
 - **Simplest:** open `index.html` in a modern browser. Everything works, including the canvas, the simulation, and save/load.
+- **Deep-links:** append `?tour=off` to either app's URL to skip the intro tour (and, LSP Planner only, `?demo=1` to load the level's starter network) — handy for demos and screenshots.
 - **As a full PWA (recommended):** service workers need `http(s)`, so serve the folder:
   ```
   python -m http.server 8000

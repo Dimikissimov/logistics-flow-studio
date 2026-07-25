@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v6";
+const CACHE_VERSION = "wt-v7";
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.

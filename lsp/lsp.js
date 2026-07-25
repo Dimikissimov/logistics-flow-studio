@@ -1115,6 +1115,9 @@
   // ================================================================
   const OB_KEY = "lsp.onboarded.v1";
   function maybeShowOnboard() {
+    // Deep-link: append ?tour=off to the URL to skip the intro tour
+    // (useful for demos/screenshots; reading location.search is offline-safe).
+    if (location.search.indexOf("tour=off") !== -1) return;
     try { if (localStorage.getItem(OB_KEY) === "1") return; } catch (_) {}
     $("onboard").hidden = false;
   }
@@ -1240,6 +1243,10 @@
     maybeShowOnboard();
     registerSW();
     status("Level " + state.levelId + " - " + level().goal);
+
+    // Deep-link: append ?demo=1 to load the level's starter network on boot
+    // (populated canvas for demos/screenshots; reuses the Starter button).
+    if (location.search.indexOf("demo=1") !== -1) loadStarter();
 
     window.addEventListener("resize", resizeCanvas);
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

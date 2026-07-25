@@ -1328,6 +1328,9 @@
   // ================================================================
   const OB_KEY = "wt.onboarded.v1";
   function maybeShowOnboard() {
+    // Deep-link: append ?tour=off to the URL to skip the intro tour
+    // (useful for demos/screenshots; reading location.search is offline-safe).
+    if (location.search.indexOf("tour=off") !== -1) return;
     if (localStorage.getItem(OB_KEY) === "1") return;
     $("onboard").hidden = false;
   }
