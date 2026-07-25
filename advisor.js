@@ -163,6 +163,105 @@
       }
     }
 
+    // ================================================================
+    // P3 RULES - material-flow chains, storage-system mix, push vs pull
+    // ================================================================
+
+    // ---- Rule 6: material-flow chain integrity ----------------------
+    const chains = D.analyzeChains(els);
+    if (chains.warnings.length) {
+      for (const w of chains.warnings) {
+        out.push(s(
+          w.severity,
+          w.msg,
+          "A complete material-flow chain (dock → staging → put-away → storage → replenish → pick → pack → ship) lets conveyors carry goods between covered legs; a broken chain forces manual travel and handling.",
+          w.code === "no-pick-feed"
+            ? "Connect storage to the outbound dock with conveyor segments (via a pack station). Chained legs drop the tour's return leg and save handling time in the sim."
+            : "Fix the flagged link so the chain closes - the flow arrows on the floor show what is connected."
+        ));
+      }
+    } else if (chains.outboundConnected && storage.length) {
+      const covered = storage.filter((e) => chains.outboundCovered.has(e.id)).length;
+      out.push(s(
+        "good",
+        `Material-flow chain is closed: ${covered}/${storage.length} storage element${storage.length > 1 ? "s are" : " is"} chained to shipping.`,
+        "Connected chains let goods ride the conveyor - the sim drops the pick tour's return leg and saves handling on covered lines.",
+        base.ok ? `~${base.chainAssistedLinesPct.toFixed(0)}% of pick lines are chain-assisted at this layout/seed.` : "Run the sim to measure the covered share."
+      ));
+    }
+
+    // ---- Rule 7: LIFO share vs FIFO-critical SKUs --------------------
+    if (base.ok && storage.length) {
+      let lifoPos = 0, totalPos = 0;
+      for (const e of storage) {
+        const def = D.ELEMENTS[e.type];
+        const cap = D.elementCapacity(e);
+        totalPos += cap;
+        if (def.rotation === "LIFO") lifoPos += cap;
+      }
+      const lifoShare = totalPos > 0 ? lifoPos / totalPos : 0;
+      if (lifoShare >= 0.35) {
+        out.push(s(
+          "medium",
+          `~${(lifoShare * 100).toFixed(0)}% of pallet positions are in LIFO systems (push-back / drive-in / block-stack).`,
+          "LIFO lanes cannot guarantee first-in-first-out rotation. SKUs with shelf life, batch traceability or revision control are FIFO-critical.",
+          "Keep FIFO-critical SKUs in pallet-flow (true FIFO), selective racking or carton-flow; reserve the LIFO lanes for stable, single-batch volume movers."
+        ));
+      }
+    }
+
+    // ---- Rule 8: high-velocity small parts -> carton-flow ------------
+    if (base.ok && storage.length) {
+      const hasPickFace = storage.some((e) => (D.ELEMENTS[e.type] || {}).pickFace);
+      if (!hasPickFace && config.skuCount >= 120) {
+        out.push(s(
+          "medium",
+          `${config.skuCount} SKUs with no carton-flow / mezzanine pick faces.`,
+          "High-velocity small parts pick fastest from carton-flow lanes: goods presented at an ergonomic face, FIFO at carton level.",
+          `Add carton-flow pick faces for the A-items - in this model they save ${Math.abs(D.ELEMENTS["carton-flow"].handlingDeltaSec)} s per pick line vs the base handling time.`
+        ));
+      }
+    }
+
+    // ---- Rule 9: push vs pull, measured with the sim -----------------
+    if (base.ok) {
+      const lay = { elements: els, gridW: layout.gridW, gridH: layout.gridH, cell };
+      const push = WT.sim.run(lay, Object.assign({}, config, { flowMode: "push" }));
+      const pull = WT.sim.run(lay, Object.assign({}, config, { flowMode: "pull" }));
+      const cur = config.flowMode === "push" ? push : pull;
+      const alt = config.flowMode === "push" ? pull : push;
+      const altName = config.flowMode === "push" ? "PULL (replenish on consumption)" : "PUSH (replenish to forecast)";
+      if (alt.stockoutPct < cur.stockoutPct - 1) {
+        out.push(s(
+          "medium",
+          `${(config.flowMode || "pull").toUpperCase()} replenishment shows ~${cur.stockoutPct.toFixed(1)}% stockout lines at this seed.`,
+          "Push (periodic, forecast-driven top-ups) can run dry between review cycles and bounces overstock back when the forecast overshoots; pull (reorder-point, consumption-driven) follows real demand.",
+          `Switching to ${altName} measures ${alt.stockoutPct.toFixed(1)}% stockouts vs ${cur.stockoutPct.toFixed(1)}% ` +
+            `(overstock ${alt.overstockUnits} vs ${cur.overstockUnits} units; avg face stock ${alt.avgFaceStockPct.toFixed(0)}% vs ${cur.avgFaceStockPct.toFixed(0)}%).`
+        ));
+      } else {
+        out.push(s(
+          "good",
+          `${(config.flowMode || "pull").toUpperCase()} replenishment is the better fit here (~${cur.stockoutPct.toFixed(1)}% stockout lines).`,
+          "Push vs pull is a service-level vs inventory trade-off; both are measured with the same seeded simulation.",
+          `The alternative (${altName}) measures ${alt.stockoutPct.toFixed(1)}% stockouts and ${alt.overstockUnits} overstock units.`
+        ));
+      }
+    }
+
+    // ---- Rule 10: goods-to-person systems need a takeaway chain ------
+    for (const e of storage) {
+      const def = D.ELEMENTS[e.type];
+      if (def.goodsToPerson && !chains.outboundCovered.has(e.id)) {
+        out.push(s(
+          "medium",
+          `${def.label} at (${e.x}, ${e.y}) is not chained to shipping.`,
+          "Goods-to-person systems (AS/RS crane, shuttle) normally discharge onto a takeaway conveyor toward pack/ship - informed by DIN EN 619 conveyor practice and VDI 3564 high-bay guidance (not a certification).",
+          "Run conveyor segments from the system to a pack station and the outbound dock so its machine cycles feed a connected flow."
+        ));
+      }
+    }
+
     // rank: high -> medium -> low -> good, stable within a tier
     out.forEach((x, i) => (x._i = i));
     out.sort((a, b) => (RANK[a.severity] - RANK[b.severity]) || (a._i - b._i));
@@ -171,12 +270,4 @@
   }
 
   WT.advisor = { analyze };
-
-  /* ==================================================================
-   * TODO (P3+): more rules as the domain grows - FIFO/LIFO vs product
-   * shelf-life, cross-dock candidates, replenishment cadence, push vs
-   * pull inventory sizing, congestion hotspots, energy/AGV routing.
-   * The panel renders whatever analyze() returns, so new rules need no
-   * UI change.
-   * ================================================================== */
 })();

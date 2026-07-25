@@ -53,6 +53,10 @@
     els.forEach((e, i) => { if (isStorage(e)) storageIdx.push(i); });
 
     let curViol = D.aisleViolations(els, config.minAisleMetres).length;
+    // P3: never trade away material-flow chain coverage - a storage
+    // element that leaves its conveyor connection would lose the chain's
+    // travel/handling benefit, defeating the golden-zone gain.
+    let curCovered = D.analyzeChains(els).outboundCovered.size;
 
     // Greedy hill-climb. Each pass tries to step every storage element one
     // cell closer to the I/O point. Distance must strictly decrease, which
@@ -81,8 +85,10 @@
           const ox = e.x, oy = e.y;
           e.x = cand.x; e.y = cand.y;
           const newViol = D.aisleViolations(els, config.minAisleMetres).length;
-          if (newViol <= curViol && distM(e) < before0 - 1e-9) {
+          const newCovered = D.analyzeChains(els).outboundCovered.size;
+          if (newViol <= curViol && newCovered >= curCovered && distM(e) < before0 - 1e-9) {
             curViol = newViol;
+            curCovered = newCovered;
             anyMove = true;
             break; // accept; move to next element
           }
