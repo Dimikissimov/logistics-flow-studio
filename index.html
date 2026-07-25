@@ -33,6 +33,10 @@
       </div>
     </div>
     <div class="topbar-actions">
+      <!-- P4 tier gate: an honest showcase switch (tiers.js), NOT DRM.
+           A real deployment would verify a license/purchase instead. -->
+      <span id="tierBadge" class="badge tier-badge">Demo version</span>
+      <button id="tierBtn" class="btn" type="button" title="Showcase switch — a real deployment would run a license/purchase check here">Unlock full version</button>
       <button id="helpBtn" class="btn ghost" type="button" title="Show the quick guide">? Guide</button>
       <button id="installBtn" class="btn primary" type="button" hidden title="Install as an offline app">Install app</button>
     </div>
@@ -221,9 +225,11 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Local scripts only. Load order: domain -> sim -> optimizer -> advisor -> app.
-       (advisor uses the optimizer; both use domain + sim.) -->
+  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> app.
+       (advisor uses the optimizer; both use domain + sim; app reads the
+        tier capability flags from tiers.js.) -->
   <script src="domain.js"></script>
+  <script src="tiers.js"></script>
   <script src="simulation.js"></script>
   <script src="optimizer.js"></script>
   <script src="advisor.js"></script>

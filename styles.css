@@ -395,6 +395,46 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .ab-table td.ab-k, .ab-table .ab-names td { font-family: var(--font); }
 .ab-rec { font-size: 0.8rem; margin-top: 10px; padding: 9px 11px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); }
 
+/* =====================================================================
+ * P4: demo/full tier gate (tiers.js). Locked = visible + padlock, never
+ * hidden. This is an honest showcase gate, not DRM (see tiers.js).
+ * ===================================================================== */
+.tier-badge {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tier-badge.full {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.lock-glyph { color: var(--text-dim); flex: none; }
+.pal-item .lock-glyph { margin-left: auto; }
+.pal-item.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+.pal-item.locked:hover { border-color: var(--border); }
+.btn.locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn.locked:hover { border-color: var(--border); }
+.btn.locked .lock-glyph { vertical-align: -2px; margin-right: 5px; }
+.adv-locked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  padding: 8px 11px;
+  margin-top: 2px;
+}
+
 /* ---- German-standards panel ---- */
 #stdDetails { }
 .std-summary { font-size: 0.9rem; font-weight: 650; cursor: pointer; padding: 2px 0; }

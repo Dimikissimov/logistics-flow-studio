@@ -580,9 +580,11 @@
   });
 
   // ================================================================
-  // PALETTE
+  // PALETTE (tier-aware: locked items stay visible with a padlock —
+  // capability flags come from tiers.js, the one gate module)
   // ================================================================
   function buildPalette() {
+    const caps = WT.tiers.caps();
     const wrap = $("palette");
     wrap.innerHTML = "";
     let lastCat = null;
@@ -599,12 +601,20 @@
       btn.className = "pal-item";
       btn.type = "button";
       btn.dataset.type = type;
+      const locked = !caps.paletteAllowed(type);
       btn.innerHTML =
         `<span class="pal-swatch" style="background:${def.color}"></span>` +
         `<span>${def.label}</span>` +
-        `<span class="pal-cat">${def.category}</span>`;
-      btn.addEventListener("click", () => setTool(state.activeTool === type ? null : type));
-      attachTooltip(btn, def.desc);
+        (locked ? WT.tiers.padlockSVG() : `<span class="pal-cat">${def.category}</span>`);
+      if (locked) {
+        btn.classList.add("locked");
+        btn.setAttribute("aria-disabled", "true");
+        btn.addEventListener("click", () => toast(caps.lockHint(def.label), "warn"));
+        attachTooltip(btn, "Full version: " + def.desc);
+      } else {
+        btn.addEventListener("click", () => setTool(state.activeTool === type ? null : type));
+        attachTooltip(btn, def.desc);
+      }
       wrap.appendChild(btn);
     }
   }
@@ -774,12 +784,20 @@
   // ---- Advisor -----------------------------------------------------
   function runAdvisor() {
     readConfigFromUI();
-    const list = WT.advisor.analyze(currentLayout(), state.config);
+    const full = WT.advisor.analyze(currentLayout(), state.config);
     const out = $("advisorOut");
-    if (!list.length) {
+    if (!full.length) {
       out.innerHTML = '<p class="empty">Place some elements, then analyze.</p>';
       return;
     }
+    // Tier gate: the demo tier shows only the top suggestions; the rest
+    // are counted honestly, not hidden without a trace.
+    const caps = WT.tiers.caps();
+    const list = full.length > caps.advisorLimit ? full.slice(0, caps.advisorLimit) : full;
+    const lockedNote =
+      list.length < full.length
+        ? `<div class="adv-locked">${WT.tiers.padlockSVG()} Demo shows ${list.length} of ${full.length} suggestions — unlock the full version for the rest.</div>`
+        : "";
     out.innerHTML = list
       .map(
         (sug) =>
@@ -789,9 +807,12 @@
           `<div class="adv-line"><span class="adv-k">Est. impact</span> ${esc(sug.impact)}</div>` +
           "</div>"
       )
-      .join("");
+      .join("") + lockedNote;
     const high = list.filter((x) => x.severity === "high").length;
-    status(`Advisor: ${list.length} suggestion(s)${high ? ", " + high + " high-priority" : ""}.`);
+    status(
+      `Advisor: ${list.length}${list.length < full.length ? " of " + full.length : ""} suggestion(s)` +
+      `${high ? ", " + high + " high-priority" : ""}${list.length < full.length ? " (demo tier)" : ""}.`
+    );
   }
 
   // ---- Optimizer ---------------------------------------------------
@@ -861,19 +882,18 @@
   }
 
   // ---- A/B comparative predictor -----------------------------------
+  // Re-callable on tier change: locked strategies render disabled with
+  // a lock marker (visible, not hidden), selections are preserved when
+  // still allowed.
   function buildAbControls() {
+    const caps = WT.tiers.caps();
+    const defaults = { abStratA: "random", abStratB: "abc" };
     for (const id of ["abStratA", "abStratB"]) {
       const selEl = $(id);
-      selEl.innerHTML = "";
-      Object.values(D.STRATEGIES).forEach((st) => {
-        const o = document.createElement("option");
-        o.value = st.id;
-        o.textContent = st.label;
-        selEl.appendChild(o);
-      });
+      const prev = selEl.value;
+      fillStrategySelect(selEl);
+      selEl.value = prev && D.STRATEGIES[prev] && caps.strategyAllowed(prev) ? prev : defaults[id];
     }
-    $("abStratA").value = "random";
-    $("abStratB").value = "abc";
   }
 
   function abLayout(kind) {
@@ -977,15 +997,25 @@
   // ================================================================
   // CONFIG CONTROLS
   // ================================================================
-  function buildConfigControls() {
-    const sel = $("strategySelect");
+  // Shared, tier-aware strategy <select> filler (used by the sim panel
+  // and both A/B selects). Locked strategies are visible but disabled
+  // with a lock marker — capability flags come from tiers.js.
+  function fillStrategySelect(sel) {
+    const caps = WT.tiers.caps();
     sel.innerHTML = "";
     Object.values(D.STRATEGIES).forEach((s) => {
       const o = document.createElement("option");
       o.value = s.id;
-      o.textContent = s.label;
+      const locked = !caps.strategyAllowed(s.id);
+      o.textContent = s.label + (locked ? " — locked (full version)" : "");
+      o.disabled = locked;
       sel.appendChild(o);
     });
+  }
+
+  function buildConfigControls() {
+    const sel = $("strategySelect");
+    fillStrategySelect(sel);
     sel.value = state.config.strategy;
     updateStrategyDesc();
     sel.addEventListener("change", () => { state.config.strategy = sel.value; updateStrategyDesc(); });
@@ -1091,7 +1121,7 @@
     state.config.seed = Math.max(0, Math.round(Number($("seedInput").value) || 0));
     state.config.orders = Math.max(1, Math.round(Number($("ordersInput").value) || 1));
     state.config.skuCount = Math.max(1, Math.round(Number($("skuInput").value) || 1));
-    state.config.strategy = $("strategySelect").value;
+    state.config.strategy = WT.tiers.coerceStrategy($("strategySelect").value);
     state.config.minAisleMetres = Number($("aisleInput").value) || D.AISLE.defaultMinMetres;
     state.config.flowMode = $("flowModeSelect").value === "push" ? "push" : "pull";
     state.config.palletType = $("palletSelect").value;
@@ -1160,7 +1190,8 @@
     if (obj.config && typeof obj.config === "object") {
       state.config = Object.assign(state.config, {
         seed: numOr(obj.config.seed, state.config.seed),
-        strategy: D.STRATEGIES[obj.config.strategy] ? obj.config.strategy : state.config.strategy,
+        // Tier gate: strategies outside the current tier fall back to ABC.
+        strategy: WT.tiers.coerceStrategy(D.STRATEGIES[obj.config.strategy] ? obj.config.strategy : state.config.strategy),
         orders: numOr(obj.config.orders, state.config.orders),
         skuCount: numOr(obj.config.skuCount, state.config.skuCount),
         minAisleMetres: numOr(obj.config.minAisleMetres, state.config.minAisleMetres),
@@ -1369,6 +1400,62 @@
   }
 
   // ================================================================
+  // P4: DEMO/FULL TIER GATE UI
+  // ----------------------------------------------------------------
+  // All capability decisions live in tiers.js (the one gate module);
+  // this section only re-renders the affected controls when the tier
+  // flips. Honest showcase: the "unlock" is a local switch, documented
+  // as the place where a real license/purchase check would go.
+  // ================================================================
+  function updatePresetLock() {
+    const btn = $("presetBtn");
+    if (!btn) return;
+    const caps = WT.tiers.caps();
+    const allowed = caps.presetAllowed("mro-distributor");
+    btn.classList.toggle("locked", !allowed);
+    btn.setAttribute("aria-disabled", allowed ? "false" : "true");
+    btn.innerHTML = (allowed ? "" : WT.tiers.padlockSVG() + " ") + "Preset: Industrial MRO distributor";
+  }
+
+  function updateTierUI() {
+    const caps = WT.tiers.caps();
+    const badge = $("tierBadge");
+    const btn = $("tierBtn");
+    if (badge) {
+      badge.textContent = caps.label + " version";
+      badge.className = "badge tier-badge" + (caps.isDemo ? "" : " full");
+    }
+    if (btn) btn.textContent = caps.isDemo ? "Unlock full version" : "Switch to demo";
+  }
+
+  // Re-render everything the tier touches. Called at boot and on flip.
+  function applyTier() {
+    state.config.strategy = WT.tiers.coerceStrategy(state.config.strategy);
+    buildPalette();
+    const sel = $("strategySelect");
+    fillStrategySelect(sel);
+    sel.value = state.config.strategy;
+    updateStrategyDesc();
+    buildAbControls();
+    updatePresetLock();
+    updateTierUI();
+    // Drop an active placement tool that the new tier does not include.
+    if (state.activeTool && !WT.tiers.caps().paletteAllowed(state.activeTool)) setTool(null);
+  }
+
+  function toggleTier() {
+    const next = WT.tiers.current() === "demo" ? "full" : "demo";
+    WT.tiers.setTier(next);
+    applyTier();
+    toast(
+      next === "full"
+        ? "Full version unlocked — all systems, strategies, the MRO preset and the full advisor. (Local showcase switch; see README.)"
+        : "Switched to the demo tier."
+    );
+    status(next === "full" ? "Full version active." : "Demo tier active — locked items show a padlock.");
+  }
+
+  // ================================================================
   // WIRE-UP + BOOT
   // ================================================================
   function wireButtons() {
@@ -1387,8 +1474,18 @@
       status("Cleared the floor.");
     });
     $("demoBtn").addEventListener("click", demoLayout);
-    $("presetBtn").addEventListener("click", () => loadPreset("mro-distributor"));
+    // Tier gate: the MRO preset is a full-version feature. The button
+    // stays visible (padlocked via updatePresetLock) and explains itself.
+    $("presetBtn").addEventListener("click", () => {
+      const caps = WT.tiers.caps();
+      if (!caps.presetAllowed("mro-distributor")) {
+        toast(caps.lockHint("The MRO-distributor preset"), "warn");
+        return;
+      }
+      loadPreset("mro-distributor");
+    });
     attachTooltip($("presetBtn"), D.PRESETS["mro-distributor"].desc);
+    $("tierBtn").addEventListener("click", toggleTier);
     $("runBtn").addEventListener("click", runSimulation);
     $("adviseBtn").addEventListener("click", runAdvisor);
     $("optimizeBtn").addEventListener("click", runOptimize);
@@ -1407,6 +1504,9 @@
     resizeCanvas();
     // load saved or seed demo
     if (!loadSaved(true)) demoLayout();
+    // P4: apply the tier gate to every gated control (palette, strategy
+    // selects, preset button, tier badge). Default tier is "demo".
+    applyTier();
     maybeShowOnboard();
     registerSW();
 
@@ -1437,8 +1537,12 @@
    *      advisor warnings), push vs pull replenishment, zone/batch/wave
    *      picking, unit-load catalog with cartons-per-pallet math, and
    *      the illustrative MRO-distributor preset (loadPreset).
-   * P4 - Android/TWA:      packaging only (Bubblewrap) - see
-   *                       PUBLISH_ANDROID.md. No app code change needed.
+   * P4 - DONE: demo/full tier gate (tiers.js capability flags ->
+   *      buildPalette / fillStrategySelect / updatePresetLock /
+   *      runAdvisor limit, applyTier + toggleTier UI) and the Android
+   *      TWA packaging scaffold (android/ + PUBLISH_ANDROID.md - docs
+   *      and config only; building/signing/submitting is the owner's
+   *      step, no AAB is fabricated here).
    * P5 - LSP Planner:      a higher-level network/planning layer that
    *                       consumes exported layouts (serialize()).
    * ================================================================== */
