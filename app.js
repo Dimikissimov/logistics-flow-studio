@@ -30,6 +30,10 @@
       orders: 200,
       skuCount: 80,
       minAisleMetres: D.AISLE.defaultMinMetres,
+      flowMode: "pull", // P3: push vs pull replenishment
+      demandSkew: 1.0, // P3: Zipf exponent (presets may skew harder)
+      palletType: "EUR1", // P3: unit-load catalog selection
+      boxType: "EURO-CASE",
     },
     lastResult: null,
     drag: null, // {id, offsetX, offsetY, moved}
@@ -48,8 +52,8 @@
   function themeColors() {
     const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     return dark
-      ? { bg: "#0e1626", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15" }
-      : { bg: "#ffffff", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04" };
+      ? { bg: "#0e1626", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171" }
+      : { bg: "#ffffff", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626" };
   }
   let COLORS = themeColors();
 
@@ -157,6 +161,7 @@
       ctx.lineWidth = e.id === state.selectedId ? 3 : 1.5;
       ctx.strokeStyle = e.id === state.selectedId ? COLORS.sel : def.color;
       ctx.stroke();
+      drawGlyph(e, def, px, py, pw, ph);
 
       // label
       const fontSize = Math.max(9, Math.min(13, cellPx * 0.62));
@@ -174,6 +179,10 @@
       }
       ctx.restore();
     }
+
+    // P3: material-flow chain arrows + broken-chain markers
+    const chains = D.analyzeChains(state.elements);
+    drawChain(chains);
 
     // aisle violations
     const viol = aisleViolations();
@@ -237,7 +246,168 @@
     ctx.fillText("I/O", ix + 9, iy + 4);
     ctx.restore();
 
-    updateBadges(viol);
+    updateBadges(viol, chains);
+  }
+
+  /* ------------------------------------------------------------------
+   * P3: distinct original glyphs per element type (all drawn inline,
+   * no external assets). Subtle strokes in the element's own colour.
+   * ------------------------------------------------------------------ */
+  function drawGlyph(e, def, px, py, pw, ph) {
+    if (pw < 26 || ph < 16) return;
+    ctx.save();
+    ctx.strokeStyle = hexA(def.color, 0.55);
+    ctx.fillStyle = hexA(def.color, 0.4);
+    ctx.lineWidth = 1;
+    const x0 = px + 5, y0 = py + ph * 0.55, w = pw - 10, h = ph * 0.4 - 4;
+    const line = (a, b, c, d2) => { ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d2); ctx.stroke(); };
+    switch (e.type) {
+      case "selective-racking": // upright frames
+        for (let i = 0; i <= 4; i++) line(x0 + (w * i) / 4, py + 4, x0 + (w * i) / 4, py + ph - 4);
+        break;
+      case "block-stack": { // grid of stacked blocks
+        const n = Math.max(2, Math.floor(w / 14));
+        for (let i = 0; i < n; i++) ctx.strokeRect(x0 + (w / n) * i + 1, y0, w / n - 3, Math.max(4, h));
+        break;
+      }
+      case "drive-in": // deep lanes + entry arrow
+        for (let i = 0; i <= 2; i++) line(x0, y0 + (h * i) / 2, x0 + w, y0 + (h * i) / 2);
+        line(x0 + w * 0.5, y0 - 5, x0 + w * 0.5, y0 + h);
+        break;
+      case "double-deep": // paired bars
+        ctx.strokeRect(x0, y0, w, Math.max(3, h * 0.4));
+        ctx.strokeRect(x0, y0 + Math.max(4, h * 0.55), w, Math.max(3, h * 0.4));
+        break;
+      case "push-back": // nested chevrons toward the face
+        for (let i = 0; i < 3; i++) {
+          const cxp = x0 + w * (0.25 + 0.25 * i);
+          line(cxp, y0, cxp - 6, y0 + h / 2);
+          line(cxp - 6, y0 + h / 2, cxp, y0 + h);
+        }
+        break;
+      case "pallet-flow": { // roller dots + flow direction
+        const n = Math.max(3, Math.floor(w / 12));
+        for (let i = 0; i < n; i++) {
+          ctx.beginPath();
+          ctx.arc(x0 + (w / (n - 1 || 1)) * i, y0 + h / 2, 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        line(x0, y0 - 4, x0 + w, y0 - 4);
+        break;
+      }
+      case "carton-flow": // small inclined lanes
+        for (let i = 0; i < 3; i++) line(x0, py + 5 + i * (ph - 10) / 2, x0 + w, py + 8 + i * (ph - 10) / 2);
+        break;
+      case "mobile-racking": // base rail + wheels
+        line(x0, py + ph - 6, x0 + w, py + ph - 6);
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(x0 + w * (0.2 + 0.3 * i), py + ph - 6, 2.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        break;
+      case "cantilever": // column with arms
+        line(x0 + 4, py + 4, x0 + 4, py + ph - 4);
+        for (let i = 0; i < 3; i++) line(x0 + 4, py + 6 + i * (ph - 12) / 2, x0 + Math.min(w, 24), py + 6 + i * (ph - 12) / 2);
+        break;
+      case "asrs": // crane mast + trolley
+        line(x0, py + ph - 5, x0 + w, py + ph - 5);
+        line(x0 + w / 2, py + 4, x0 + w / 2, py + ph - 5);
+        ctx.strokeRect(x0 + w / 2 - 4, y0, 8, 6);
+        break;
+      case "shuttle": // twin rails + shuttle cart
+        line(x0, y0, x0 + w, y0);
+        line(x0, y0 + 6, x0 + w, y0 + 6);
+        ctx.fillRect(x0 + w * 0.6, y0 + 1, 10, 4);
+        break;
+      case "mezzanine": // dashed upper deck
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(px + 6, py + 6, pw - 12, ph - 12);
+        ctx.setLineDash([]);
+        break;
+      case "conveyor": { // roller line
+        const horiz = pw >= ph;
+        const n = Math.max(2, Math.floor((horiz ? pw : ph) / 10));
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n;
+          ctx.beginPath();
+          if (horiz) ctx.arc(px + pw * t, py + ph / 2, 2, 0, Math.PI * 2);
+          else ctx.arc(px + pw / 2, py + ph * t, 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        break;
+      }
+      case "pack-station": // box with tape
+        ctx.strokeRect(x0 + w / 2 - 8, y0 - 2, 16, Math.max(8, h));
+        line(x0 + w / 2, y0 - 2, x0 + w / 2, y0 - 2 + Math.max(8, h));
+        break;
+      default:
+        break;
+    }
+    ctx.restore();
+  }
+
+  /* ------------------------------------------------------------------
+   * P3: draw the material-flow chain - arrows along connected edges
+   * (pointing toward shipping where a path exists, away from receiving
+   * otherwise) and a warning marker on broken-chain elements.
+   * ------------------------------------------------------------------ */
+  function drawChain(chains) {
+    ctx.save();
+    ctx.strokeStyle = COLORS.flow;
+    ctx.fillStyle = COLORS.flow;
+    ctx.lineWidth = 1.6;
+    const center = (id) => {
+      const e = state.elements.find((x) => x.id === id);
+      return e ? { x: (e.x + e.w / 2) * cellPx, y: (e.y + e.d / 2) * cellPx } : null;
+    };
+    for (const edge of chains.edges) {
+      const a = center(edge.a), b = center(edge.b);
+      if (!a || !b) continue;
+      let from = a, to = b;
+      const dsA = chains.distToShip[edge.a], dsB = chains.distToShip[edge.b];
+      const drA = chains.distFromReceive[edge.a], drB = chains.distFromReceive[edge.b];
+      if (dsA !== undefined && dsB !== undefined) {
+        if (dsA < dsB) { from = b; to = a; } // flow toward shipping
+      } else if (drA !== undefined && drB !== undefined) {
+        if (drA > drB) { from = b; to = a; } // flow away from receiving
+      }
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      // arrowhead at 65% of the way
+      const t = 0.65;
+      const mx = from.x + (to.x - from.x) * t, my = from.y + (to.y - from.y) * t;
+      const ang = Math.atan2(to.y - from.y, to.x - from.x);
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx - 7 * Math.cos(ang - 0.45), my - 7 * Math.sin(ang - 0.45));
+      ctx.lineTo(mx - 7 * Math.cos(ang + 0.45), my - 7 * Math.sin(ang + 0.45));
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // broken-chain markers
+    for (const w of chains.warnings) {
+      if (!w.elId) continue;
+      const e = state.elements.find((x) => x.id === w.elId);
+      if (!e) continue;
+      const mx = (e.x + e.w) * cellPx - 7, my = e.y * cellPx + 7;
+      ctx.beginPath();
+      ctx.arc(mx, my, 6.5, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.warnMark;
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("!", mx, my + 0.5);
+      ctx.textAlign = "start";
+      ctx.fillStyle = COLORS.flow;
+    }
+    ctx.restore();
   }
 
   function clipText(text, x, y, maxW) {
@@ -257,16 +427,27 @@
     return ({
       "selective-racking": "Racking",
       "block-stack": "Block stack",
+      "drive-in": "Drive-in",
+      "double-deep": "Double-deep",
+      "push-back": "Push-back",
+      "pallet-flow": "Pallet-flow",
+      "carton-flow": "Carton-flow",
+      "mobile-racking": "Mobile rack",
+      "cantilever": "Cantilever",
+      "asrs": "AS/RS",
+      "shuttle": "Shuttle",
+      "mezzanine": "Mezzanine",
       "dock-in": "Dock IN",
       "dock-out": "Dock OUT",
       "staging": "Staging",
       "conveyor": "Conveyor",
       "push-station": "Push",
       "pull-station": "Pull",
+      "pack-station": "Pack",
     })[type] || type;
   }
 
-  function updateBadges(viol) {
+  function updateBadges(viol, chains) {
     $("capBadge").textContent = "Positions: " + totalPositions();
     const ab = $("aisleBadge");
     if (viol && viol.length) {
@@ -275,6 +456,27 @@
     } else {
       ab.textContent = "Aisle OK";
       ab.className = "badge ok";
+    }
+    const fb = $("chainBadge");
+    if (fb && chains) {
+      const hasConnectors = state.elements.some((e) => D.isConnector(e));
+      if (chains.warnings.length) {
+        fb.textContent = "Flow: " + chains.warnings.length + " chain issue" + (chains.warnings.length > 1 ? "s" : "");
+        fb.className = "badge warn";
+        fb.title = chains.warnings.map((w) => w.msg).join("\n");
+      } else if (chains.outboundConnected) {
+        fb.textContent = "Flow chain OK";
+        fb.className = "badge ok";
+        fb.title = "Storage is chained to shipping - conveyor legs assist picking in the sim.";
+      } else if (hasConnectors) {
+        fb.textContent = "Flow: partial";
+        fb.className = "badge muted";
+        fb.title = "Flow elements placed but no storage is chained to shipping yet.";
+      } else {
+        fb.textContent = "Flow: manual";
+        fb.className = "badge muted";
+        fb.title = "No conveyors/stations placed - all movement is manual travel.";
+      }
     }
     updateStandardsLive();
   }
@@ -383,8 +585,16 @@
   function buildPalette() {
     const wrap = $("palette");
     wrap.innerHTML = "";
+    let lastCat = null;
     for (const type of D.paletteOrder) {
       const def = ELEMENTS[type];
+      if (def.category !== lastCat) {
+        lastCat = def.category;
+        const head = document.createElement("div");
+        head.className = "pal-head";
+        head.textContent = def.category === "storage" ? "Storage systems" : "Flow elements";
+        wrap.appendChild(head);
+      }
       const btn = document.createElement("button");
       btn.className = "pal-item";
       btn.type = "button";
@@ -426,14 +636,24 @@
     rows.push(row("Position", `${(el.x * CELL_M).toFixed(0)}, ${(el.y * CELL_M).toFixed(0)} m`));
     rows.push(row("Footprint", `${(el.w * CELL_M).toFixed(1)} × ${(el.d * CELL_M).toFixed(1)} m`));
     if (def.category === "storage") {
-      rows.push(row("Pallet positions", String(D.elementCapacity(el))));
+      const cap = D.elementCapacity(el);
+      rows.push(row(def.pickFace ? "Positions (pallet-eq.)" : "Pallet positions", String(cap)));
+      const cpp = D.cartonsPerPallet(state.config.boxType, state.config.palletType);
+      rows.push(row("Est. cartons", `≈${(cap * cpp.perPallet).toLocaleString("en-US")} (${cpp.perPallet}/${state.config.palletType} pallet)`));
       rows.push(row("Levels", String(def.levels)));
       rows.push(row("Selectivity", (def.selectivity * 100).toFixed(0) + "%"));
       rows.push(row("Rotation", def.rotation));
       rows.push(row("Cost index", "×" + def.costIndex));
+      if (def.goodsToPerson) {
+        rows.push(row("Pick mode", `Goods-to-person · ${def.cycleSec}s cycle/line`));
+      } else if (def.handlingDeltaSec) {
+        const d2 = def.handlingDeltaSec;
+        rows.push(row("Handling", (d2 > 0 ? "+" : "") + d2 + " s/line vs base"));
+      }
     }
     if (def.io) rows.push(row("I/O role", def.io));
     if (def.flow) rows.push(row("Flow control", def.flow.toUpperCase()));
+    if (def.stage) rows.push(row("Chain stage", def.stage));
 
     let sizeEditor = "";
     if (def.resizable) {
@@ -508,15 +728,25 @@
 
   function renderKPIs(res) {
     const kpi = $("kpi");
+    const cpp = D.cartonsPerPallet(state.config.boxType, state.config.palletType);
+    const estCartons = res.palletPositionsTotal * cpp.perPallet;
     const cards = [
       kcard("Throughput", res.throughputOrdersPerHour.toFixed(1), "orders / hr"),
       kcard("Avg pick travel", res.avgPickTravelM.toFixed(1), "m / order"),
       kcard("Storage fill", res.storageFillPct.toFixed(1), "%"),
       kcard("Positions used", res.palletPositionsUsed + " / " + res.palletPositionsTotal, "pallet pos."),
+      kcard("Stockouts", res.stockoutPct.toFixed(1), "% of lines"),
+      kcard("Overstock returns", String(res.overstockUnits), "units"),
+      kcard("Avg face stock", res.avgFaceStockPct.toFixed(0), "% of capacity"),
+      kcard("Chain-assisted", res.chainAssistedLinesPct.toFixed(0), "% of lines"),
     ];
+    const skewTxt = res.params.demandSkew && res.params.demandSkew !== 1 ? `, demand skew ${res.params.demandSkew}` : "";
     const note =
-      `<p class="kpi-note">Synthetic, seeded run — ${res.params.orders} orders, ${res.params.skuCount} SKUs, ` +
-      `${res.params.pickers} picker @ ${res.params.pickerSpeedMps} m/s, ${res.params.handlingSecPerLine}s/line. ` +
+      `<p class="kpi-note">Synthetic, seeded run — ${res.params.orders} orders, ${res.params.skuCount} SKUs${skewTxt}, ` +
+      `${res.params.pickers} picker @ ${res.params.pickerSpeedMps} m/s, ${res.params.handlingSecPerLine}s/line base handling, ` +
+      `${(res.flowMode || "pull").toUpperCase()} replenishment` +
+      (res.params.pullLeadOrders ? ` (lead ${res.params.pullLeadOrders} orders)` : "") +
+      `. Capacity ≈ ${estCartons.toLocaleString("en-US")} cartons of type ${state.config.boxType} on ${state.config.palletType}. ` +
       `Same seed → identical KPIs.</p>`;
     kpi.innerHTML = cards.join("") + note;
   }
@@ -676,6 +906,7 @@
       ["Throughput", A.throughputOrdersPerHour, B.throughputOrdersPerHour, "orders/hr", "high"],
       ["Avg pick travel", A.avgPickTravelM, B.avgPickTravelM, "m/order", "low"],
       ["Storage fill", A.storageFillPct, B.storageFillPct, "%", "neutral"],
+      ["Stockouts", A.stockoutPct, B.stockoutPct, "% lines", "low"],
     ];
     let table =
       `<table class="ab-table"><thead><tr><th></th><th>A</th><th>B</th></tr></thead><tbody>` +
@@ -691,9 +922,14 @@
     // Plain-language recommendation (primary criterion: lower pick travel).
     const better = A.avgPickTravelM <= B.avgPickTravelM ? { r: A, n: nameA, o: B, on: nameB } : { r: B, n: nameB, o: A, on: nameA };
     const pct = better.o.avgPickTravelM > 0 ? ((better.o.avgPickTravelM - better.r.avgPickTravelM) / better.o.avgPickTravelM) * 100 : 0;
+    const thrWins = better.r.throughputOrdersPerHour >= better.o.throughputOrdersPerHour;
+    const claim = thrWins
+      ? `about ${pct.toFixed(0)}% less pick travel and higher throughput than ${esc(better.on)}`
+      : `about ${pct.toFixed(0)}% less pick travel than ${esc(better.on)} — but ${esc(better.on)} keeps the higher throughput ` +
+        `(${better.o.throughputOrdersPerHour.toFixed(1)} vs ${better.r.throughputOrdersPerHour.toFixed(1)} orders/hr): its per-order overheads outweigh the saved metres here`;
     const rec = pct < 0.5
       ? `<strong>${esc(nameA)}</strong> and <strong>${esc(nameB)}</strong> are effectively tied on pick travel at seed ${state.config.seed}.`
-      : `<strong>${esc(better.n)}</strong> is the better choice — about ${pct.toFixed(0)}% less pick travel and higher throughput than ${esc(better.on)} (seed ${state.config.seed}).`;
+      : `<strong>${esc(better.n)}</strong> has ${claim} (seed ${state.config.seed}).`;
     out.innerHTML = table + `<p class="ab-rec">${rec}</p>`;
     status("Compared A vs B (deterministic, same seed).");
   }
@@ -704,7 +940,9 @@
     { code: "DIN 15185", gov: "Safety of storage installations; working-aisle design for industrial trucks.", app: "The live minimum-aisle check flags rack rows placed too close (status below)." },
     { code: "EN 15512", gov: "Steel static storage systems — adjustable pallet racking; structural design principles.", app: "Models racking capacity and levels. It does NOT perform structural/load design." },
     { code: "EPAL / DIN EN 13698", gov: "Production specification for the flat wooden Euro (EUR) pallet.", app: "EUR1–EUR6 real dimensions are built into the domain model." },
-    { code: "VDI 2510 / VDI 3564", gov: "VDI 2510: automated guided vehicle (AGV) systems. VDI 3564: fire-protection design for high-bay / automated warehouses.", app: "Referenced for the AGV/AS-RS material-flow modelling planned in P3/P5." },
+    { code: "VDI 2510", gov: "VDI guideline for automated guided vehicle (AGV) systems.", app: "Referenced for the AGV material-flow modelling planned in P5. Informed by, not certified." },
+    { code: "VDI 3564", gov: "VDI recommendations for high-bay and automated (AS/RS) warehouse design, including fire-protection aspects.", app: "The AS/RS crane-aisle element (density, levels, machine cycle time) is informed by VDI 3564 high-bay design guidance. No certification is performed." },
+    { code: "DIN EN 619", gov: "Continuous handling equipment and systems — safety requirements for equipment for mechanical handling of unit loads (conveyors).", app: "Conveyor elements and the P3 material-flow chains are informed by EN 619 unit-load conveyor concepts. The app checks chain LOGIC only, never conveyor safety compliance." },
     { code: "DGUV rules", gov: "German statutory accident-insurance rules for workplace and warehouse safety.", app: "General safety framing; this app is a planning aid, not a safety assessment." },
   ];
 
@@ -783,6 +1021,66 @@
     $("seedInput").addEventListener("change", readConfigFromUI);
     $("ordersInput").addEventListener("change", readConfigFromUI);
     $("skuInput").addEventListener("change", readConfigFromUI);
+
+    // P3: push vs pull replenishment toggle
+    const fm = $("flowModeSelect");
+    fm.innerHTML =
+      '<option value="pull">Pull — replenish on consumption (reorder point)</option>' +
+      '<option value="push">Push — replenish to forecast (periodic top-up)</option>';
+    fm.value = state.config.flowMode;
+    fm.addEventListener("change", () => { state.config.flowMode = fm.value; });
+
+    // P3: unit-load catalog (pallet + carton/tote selects feed the
+    // cartons-per-pallet math shown in properties, KPIs and the table).
+    const ps = $("palletSelect");
+    ps.innerHTML = "";
+    D.PALLETS.forEach((p) => {
+      const o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = `${p.label} (${p.length}×${p.width} mm)`;
+      ps.appendChild(o);
+    });
+    ps.value = state.config.palletType;
+    const bs = $("boxSelect");
+    bs.innerHTML = "";
+    D.BOXES.forEach((b) => {
+      const o = document.createElement("option");
+      o.value = b.id;
+      o.textContent = `${b.label}${b.tote ? " [tote]" : ""}`;
+      bs.appendChild(o);
+    });
+    bs.value = state.config.boxType;
+    const onCatalog = () => {
+      state.config.palletType = ps.value;
+      state.config.boxType = bs.value;
+      renderCatalog();
+      renderProps();
+      scheduleSave();
+    };
+    ps.addEventListener("change", onCatalog);
+    bs.addEventListener("change", onCatalog);
+    renderCatalog();
+  }
+
+  // P3: cartons-per-pallet table for the selected pallet type.
+  function renderCatalog() {
+    const out = $("catalogOut");
+    if (!out) return;
+    const palId = state.config.palletType;
+    const pal = D.palletById(palId);
+    let html =
+      `<table class="cat-table"><thead><tr><th>Unit load</th><th>L×W×H mm</th><th>/layer</th><th>layers</th><th>/pallet</th></tr></thead><tbody>`;
+    for (const b of D.BOXES) {
+      const c = D.cartonsPerPallet(b.id, palId);
+      const sel = b.id === state.config.boxType ? ' class="cat-sel"' : "";
+      html +=
+        `<tr${sel}><td>${esc(b.label)}${b.tote ? ' <span class="cat-tote">tote</span>' : ""}</td>` +
+        `<td>${b.length}×${b.width}×${b.height}</td>` +
+        `<td>${c.perLayer}</td><td>${c.layers}</td><td><strong>${c.perPallet}</strong></td></tr>`;
+    }
+    html += "</tbody></table>";
+    html += `<p class="hint">Simple rectangular fit on the ${esc(pal.label)} (${pal.length}×${pal.width} mm) with a 1.2 m usable load height — no interlocking/overhang patterns. Storage capacity above converts pallet positions → estimated cartons with these figures.</p>`;
+    out.innerHTML = html;
   }
 
   function updateStrategyDesc() {
@@ -795,6 +1093,9 @@
     state.config.skuCount = Math.max(1, Math.round(Number($("skuInput").value) || 1));
     state.config.strategy = $("strategySelect").value;
     state.config.minAisleMetres = Number($("aisleInput").value) || D.AISLE.defaultMinMetres;
+    state.config.flowMode = $("flowModeSelect").value === "push" ? "push" : "pull";
+    state.config.palletType = $("palletSelect").value;
+    state.config.boxType = $("boxSelect").value;
   }
 
   function pushConfigToUI() {
@@ -806,6 +1107,10 @@
     $("aislePreset").value = D.AISLE.presets.some((p) => p.metres === state.config.minAisleMetres)
       ? String(state.config.minAisleMetres)
       : "custom";
+    $("flowModeSelect").value = state.config.flowMode;
+    $("palletSelect").value = state.config.palletType;
+    $("boxSelect").value = state.config.boxType;
+    renderCatalog();
     updateStrategyDesc();
   }
 
@@ -859,6 +1164,10 @@
         orders: numOr(obj.config.orders, state.config.orders),
         skuCount: numOr(obj.config.skuCount, state.config.skuCount),
         minAisleMetres: numOr(obj.config.minAisleMetres, state.config.minAisleMetres),
+        flowMode: obj.config.flowMode === "push" ? "push" : "pull",
+        demandSkew: numOr(obj.config.demandSkew, state.config.demandSkew),
+        palletType: D.PALLETS.some((p) => p.id === obj.config.palletType) ? obj.config.palletType : state.config.palletType,
+        boxType: D.BOXES.some((b) => b.id === obj.config.boxType) ? obj.config.boxType : state.config.boxType,
       });
     }
     pushConfigToUI();
@@ -960,6 +1269,30 @@
   }
 
   // ================================================================
+  // P3: ONE-CLICK PRESETS (domain.js PRESETS)
+  // ================================================================
+  function loadPreset(presetId) {
+    const p = D.PRESETS[presetId];
+    if (!p) return;
+    state.idCounter = 0;
+    state.elements = p.elements.map((e) => ({
+      id: "el-" + ++state.idCounter,
+      type: e.type, x: e.x, y: e.y, w: e.w, d: e.d,
+    }));
+    state.selectedId = null;
+    state.preview = null;
+    if (p.config) {
+      state.config = Object.assign(state.config, p.config);
+    }
+    pushConfigToUI();
+    renderProps();
+    render();
+    scheduleSave();
+    status(`Loaded preset: ${p.label}. Independent + illustrative — not affiliated with or endorsed by any real company. Run the sim!`);
+    toast("Preset loaded — see the flow arrows, then Run simulation.");
+  }
+
+  // ================================================================
   // ONBOARDING
   // ================================================================
   const OB_KEY = "wt.onboarded.v1";
@@ -1054,6 +1387,8 @@
       status("Cleared the floor.");
     });
     $("demoBtn").addEventListener("click", demoLayout);
+    $("presetBtn").addEventListener("click", () => loadPreset("mro-distributor"));
+    attachTooltip($("presetBtn"), D.PRESETS["mro-distributor"].desc);
     $("runBtn").addEventListener("click", runSimulation);
     $("adviseBtn").addEventListener("click", runAdvisor);
     $("optimizeBtn").addEventListener("click", runOptimize);
@@ -1097,9 +1432,11 @@
    *      optimizer (optimizer.js -> runOptimize/applyOptimize), A/B
    *      comparative predictor (runCompare), German-standards panel
    *      (buildStandards + live D.aisleViolations check).
-   * P3 - Domain depth:     new ELEMENTS entries in domain.js appear in
-   *                       the palette, sim, advisor & optimizer with no
-   *                       further UI change; add material-flow chains.
+   * P3 - DONE: 12 storage systems with sim-relevant characteristics,
+   *      material-flow chains (D.analyzeChains -> flow arrows + badge +
+   *      advisor warnings), push vs pull replenishment, zone/batch/wave
+   *      picking, unit-load catalog with cartons-per-pallet math, and
+   *      the illustrative MRO-distributor preset (loadPreset).
    * P4 - Android/TWA:      packaging only (Bubblewrap) - see
    *                       PUBLISH_ANDROID.md. No app code change needed.
    * P5 - LSP Planner:      a higher-level network/planning layer that

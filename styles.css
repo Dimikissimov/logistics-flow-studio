@@ -160,8 +160,37 @@ h1, h2, h3 { margin: 0; font-weight: 650; }
 .pal-item.active { outline: 2px solid var(--accent); outline-offset: 1px; }
 .pal-swatch { width: 16px; height: 16px; border-radius: 4px; flex: none; }
 .pal-cat { margin-left: auto; font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.pal-head {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 6px 0 0;
+}
+.pal-head:first-child { margin-top: 0; }
 
 .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+/* ---------------- P3: unit-load catalog ---------------- */
+.catalog-out { margin-top: 10px; overflow-x: auto; }
+.cat-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+.cat-table th, .cat-table td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--border); }
+.cat-table th:first-child, .cat-table td:first-child { text-align: left; }
+.cat-table thead th { color: var(--text-dim); font-size: 0.66rem; font-weight: 600; }
+.cat-table td { font-family: var(--mono); }
+.cat-table td:first-child { font-family: var(--font); }
+.cat-table tr.cat-sel td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.cat-tote {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 5px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
 
 /* ---------------- Canvas ---------------- */
 .canvas-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }

@@ -58,6 +58,8 @@
           <button id="clearBtn" class="btn danger" type="button" title="Remove all elements">Clear</button>
           <button id="demoBtn" class="btn" type="button" title="Load the starter demo layout">Demo</button>
         </div>
+        <button id="presetBtn" class="btn wide" type="button" style="margin-top:8px">Preset: Industrial MRO distributor</button>
+        <p class="hint">An <em>illustrative</em> large-distributor layout (rack rows, AS/RS aisle, conveyor spine, push/pull stations, both docks) with 80/20-skewed demand. Independent, based on public information about the industry segment — <strong>not affiliated with or endorsed by Würth</strong> or any real company.</p>
         <input id="importInput" type="file" accept="application/json,.json" hidden />
       </section>
     </aside>
@@ -68,6 +70,7 @@
         <span id="modeBadge" class="badge">Mode: Select</span>
         <span id="capBadge" class="badge muted">Positions: 0</span>
         <span id="aisleBadge" class="badge ok">Aisle OK</span>
+        <span id="chainBadge" class="badge muted">Flow: manual</span>
       </div>
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="floor" aria-label="Warehouse floor plan editor"></canvas>
@@ -115,8 +118,31 @@
           <label for="aisleInput">Min working aisle (m)</label>
           <input id="aisleInput" type="number" value="2.9" min="0.5" step="0.1" />
         </div>
+        <div class="field">
+          <label for="flowModeSelect">Replenishment flow (push vs pull)</label>
+          <select id="flowModeSelect"></select>
+        </div>
+        <p class="hint">Push tops pick faces up on a periodic forecast (can overstock and run dry between cycles); pull replenishes on consumption via a reorder point. Both are simulated on the pick-face inventory — see the stockout / overstock KPIs.</p>
         <button id="runBtn" class="btn primary wide" type="button">▶ Run simulation</button>
         <div id="kpi" class="kpi"><!-- filled after a run --></div>
+      </section>
+
+      <!-- P3: unit-load catalog (pallets, cartons, totes) -->
+      <section class="card">
+        <details id="catalogDetails">
+          <summary class="std-summary">Unit loads — pallets, cartons &amp; totes</summary>
+          <div class="field-row" style="margin-top:10px">
+            <div class="field">
+              <label for="palletSelect">Pallet type</label>
+              <select id="palletSelect"></select>
+            </div>
+            <div class="field">
+              <label for="boxSelect">Carton / tote</label>
+              <select id="boxSelect"></select>
+            </div>
+          </div>
+          <div id="catalogOut" class="catalog-out"><!-- filled by app.js --></div>
+        </details>
       </section>
 
       <!-- P2: heuristic advisor -->
@@ -179,9 +205,9 @@
       <h2 id="obTitle">Welcome to WarehouseTwin</h2>
       <p class="ob-sub">A tiny, honest warehouse digital twin. Three steps and you are running.</p>
       <ol class="ob-steps">
-        <li><strong>1 · Place racks &amp; docks.</strong> Click a palette item, then click the floor. Drag to move, keep a valid aisle between rack rows.</li>
-        <li><strong>2 · Pick a strategy.</strong> Choose Random or ABC 80/20 slotting on the right.</li>
-        <li><strong>3 · Run the sim.</strong> Hit Run to see throughput, pick travel and storage fill. Same seed → same result.</li>
+        <li><strong>1 · Place racks &amp; docks.</strong> Click a palette item, then click the floor. Drag to move, keep a valid aisle between rack rows. Chain conveyors from storage to a pack station and the outbound dock — flow arrows show what is connected.</li>
+        <li><strong>2 · Pick strategies.</strong> Choose slotting/picking (Random, ABC, Zone, Batch, Wave) and push vs pull replenishment on the right — or load the MRO preset for a full layout.</li>
+        <li><strong>3 · Run the sim.</strong> Hit Run to see throughput, pick travel, storage fill, stockouts and overstock. Same seed → same result.</li>
       </ol>
       <p class="ob-note">All data is synthetic and seeded. Icons and code are original/open. Nothing is sent anywhere — it runs fully offline.</p>
       <div class="ob-actions">
