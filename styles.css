@@ -117,6 +117,10 @@ h1, h2, h3 { margin: 0; font-weight: 650; }
 .btn.danger:hover { border-color: var(--danger); }
 .btn.wide { width: 100%; margin-top: 10px; }
 .btn.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* P5: cross-app links (anchors styled as buttons, e.g. the LSP Planner
+   link in the header and the back-link in lsp/). */
+a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+a.btn.app-link { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 600; white-space: nowrap; }
 
 /* ---------------- Layout ---------------- */
 .layout {

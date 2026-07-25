@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v4";
+const CACHE_VERSION = "wt-v5";
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -20,6 +20,11 @@ const APP_SHELL = [
   "./optimizer.js",
   "./advisor.js",
   "./app.js",
+  // P5: LSP Planner sub-app (network-level planning game)
+  "./lsp/index.html",
+  "./lsp/lsp-styles.css",
+  "./lsp/lsp-engine.js",
+  "./lsp/lsp.js",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./icons/icon-192.png",

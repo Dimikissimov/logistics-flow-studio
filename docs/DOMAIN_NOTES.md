@@ -1,6 +1,6 @@
-# Domain notes (Passes 1–3)
+# Domain notes (Passes 1–5)
 
-The reference behind WarehouseTwin's domain model. Everything here is a **simplified, synthetic teaching model**. Dimensions of standardised objects (pallets) are drawn from public standards; the operational figures (densities, selectivity, costs, picker speed, handling deltas, cycle times) are **illustrative order-of-magnitude values**, not vendor specifications and not a certification of anything. Where a number is an assumption, it says so.
+The reference behind the domain models of both apps — WarehouseTwin (§1–§8) and the P5 LSP Planner network game (§9). Pass 4 added delivery/tiering only, no domain content. Everything here is a **simplified, synthetic teaching model**. Dimensions of standardised objects (pallets) are drawn from public standards; the operational figures (densities, selectivity, costs, picker speed, handling deltas, cycle times) are **illustrative order-of-magnitude values**, not vendor specifications and not a certification of anything. Where a number is an assumption, it says so.
 
 ---
 
@@ -190,3 +190,57 @@ All synthetic, all documented in `simulation.js`:
 The one-click preset "**Industrial MRO distributor (illustrative)**" loads a 40 × 24 m floor with three selective rack rows, drive-in, push-back, pallet-flow and double-deep deep-lane blocks, an AS/RS crane aisle and shuttle system, carton-flow and mezzanine small-parts picking, a conveyor spine with feeders, push/pull stations, staging at both ends, a pack station and paired inbound/outbound docks — with 240 SKUs at demand skew 1.15 (a hard 80/20), pull replenishment and ABC slotting.
 
 It is **independent and illustrative**, assembled from publicly known patterns of the industrial-MRO distribution segment (very high SKU count, strong Pareto skew, small-parts fast-pick faces, AS/RS + conveyor spine). It is **not affiliated with, endorsed by, or a depiction of Würth** or any real company; no real layout, data or branding is used.
+
+
+---
+
+## 9. LSP Planner — the network-level model (P5)
+
+The second app (`lsp/`) zooms out to a **logistics network**: factory → DCs / cross-docks → customer zones on an **abstract grid region** (60 × 36 cells, **1 cell = 10 km** — deliberately not any real country, company or network). Everything below is a simplified, seeded teaching model; every cost and CO2 figure is an **estimate from the stated assumption**, not a quotation from any carrier, 3PL or manufacturer. The engine (`lsp/lsp-engine.js`) is a **pure function**: the same design at the same level returns byte-identical results, in the browser and in Node (`lsp/verify.js` proves it on every run).
+
+### Demand (seeded)
+
+Each customer zone carries a weekly demand **mean (t/wk)** and a **coefficient of variation (CV)**, drawn once from the level's seed (mulberry32 — the same PRNG the warehouse sim uses) and stored on the zone. σ = CV × mean. Evaluation itself contains **no randomness at all**.
+
+### Routing and flows
+
+Zones are served along the **shortest lane path (km) from a factory** over the lanes the player drew (Dijkstra; deterministic tie-breaks). The zone's mean demand flows along every leg of that path; a zone with no path is unserved (zero service, and cost/CO2 points are scaled by the served share so an empty network cannot score). Single-sourcing only — no flow splitting.
+
+### Transport cost + CO2 (per lane, per week — estimates)
+
+| Mode | Cost model | CO2 model | Speed |
+|------|-----------|-----------|-------|
+| Full truckload (FTL) | trucks = ⌈flow / 15 t⌉, × 1.40 EUR/truck-km | 0.90 kg CO2/truck-km | 500 km/day |
+| Parcel / LTL | 0.30 EUR/tonne-km | 0.18 kg CO2/tonne-km (≈180 g/t-km) | 350 km/day |
+
+The FTL ceiling is the point: a 3 t/wk flow still pays (and emits) a whole truck — utilization is shown per lane, and the advisor flags lanes under 35%. At full load FTL works out to ≈0.093 EUR/t-km and ≈60 g CO2/t-km, in the ballpark of published road-freight ranges; parcel/LTL is costlier and dirtier per tonne-km (smaller vehicles, extra handling legs). **One-way costs only — backhaul/empty running is not modelled.** All CO2 output is labelled *estimate* with these assumptions.
+
+### Lead time and service
+
+Delivery lead time to a zone = dispatch at its serving stock point (0.5 d) + per leg: distance/speed + 0.2 d load/unload + 0.3 d per cross-dock dwell. A zone with **no stocking DC** on its path waits for make-to-order production at the factory (+2.5 d) — that is what a DC decouples. Coverage = 1 within the level's lead-time target, then falls linearly to 0 at 3× target. Zone service = coverage × the serving DC's fill rate; network **service level is the demand-weighted average**.
+
+### Inventory: base-stock safety stock + square-root pooling
+
+Per stocking DC, over the zones it serves:
+
+- **Safety stock** `SS = z · √LT · σ_pooled` with `z = 1.65` (~95%), LT = the DC's own replenishment path from the factory in weeks, and `σ_pooled = √(Σ σᵢ²)` — the classic **risk-pooling / square-root law** under independent zone demand. This is a JS reimplementation of the same textbook base-stock logic as the author's Python reference implementation (`supply-network-opt/supplynet/safetystock.py`).
+- **Cycle stock** = 0.35 weeks of the DC's mean throughput (≈ half of a 0.7-week order cycle — assumption).
+- **Holding cost** = (SS + cycle) × **10 EUR/t-wk** (assumes ~2 000 EUR/t goods value at 25%/yr).
+
+Real demand is neither perfectly normal nor independent — the pooled numbers are model-based estimates, and the advisor says so when it cites the √n effect.
+
+### Push vs pull (transparent heuristic)
+
+Per-DC toggle. **Pull** (reorder point, consumption-driven): fill = 0.95, holding as above. **Push** (forecast allocation, pre-positioned): fill = 0.98 − 0.15 × demand-weighted CV (a touch *better* than pull when demand is stable, CV < 0.2; markedly worse when volatile), holding × (1 + 0.8 × CV) for forecast-error overstock. These functional forms are stated assumptions that make the classic push/pull trade-off *measurable* in the game (L3 proves pull > push at CV ≈ 0.7 on every `verify.js` run); they are not a claim about any real planning system.
+
+### Facilities (weekly estimates)
+
+Factory 4 000 EUR fixed; central DC 3 000 + 4 EUR/t handled; regional DC 1 600 + 4 EUR/t; cross-dock 900 + 1.5 EUR/t and **zero stock** (0.3 d dwell). No capacity limits on sites or lanes — cost pressure is the constraint, not hard capacity.
+
+### Scoring and levels
+
+Score = **45% cost + 40% service + 15% CO2** (weights shown in the UI). Cost/CO2 sub-scores compare against the level budget (capped at 1.2× headroom) and scale with the served-demand share; service maps 50→100% onto 0→100 points. Stars at ≥42/58/72/85. Each level also has hard pass/fail thresholds (cost ≤ budget, service ≥ target, CO2 ≤ budget, all zones connected). **Budgets were calibrated against the reference designs** (`referenceDesign()` in the engine = the in-app "Starter" networks): the reference passes each level with margin, while the design that misses the level's lesson fails — L2's single-DC network misses the service target, L3's push network misses service *and* budget, L4 without the cross-dock misses budget *and* CO2. `lsp/verify.js` re-checks all of this, plus determinism and the demo-tier level lock, on every run.
+
+### Simplifications (deliberate)
+
+Euclidean distances on an abstract grid; single-sourcing shortest-path routing; no capacity constraints; no backhaul; steady-state weekly averages (no day-by-day simulation); normal/independent demand behind the safety-stock formula; fill rates as fixed policy numbers rather than simulated shortages; CO2 as two per-mode factors. It is a teaching game about network trade-offs — not a network design suite, a TMS, or a carbon-accounting tool.
