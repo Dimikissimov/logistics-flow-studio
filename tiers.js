@@ -53,6 +53,8 @@
       presets: [],
       // Advisor: only the top suggestions are shown.
       advisorLimit: 2,
+      // P5 LSP Planner: demo plays levels L1-L2; L3+ render locked.
+      lspLevels: ["L1", "L2"],
     },
     full: {
       id: "full",
@@ -61,6 +63,7 @@
       strategies: null,
       presets: null,
       advisorLimit: Infinity,
+      lspLevels: null,
     },
   };
 
@@ -99,6 +102,8 @@
       paletteAllowed: (type) => !t.palette || t.palette.indexOf(type) !== -1,
       strategyAllowed: (sid) => !t.strategies || t.strategies.indexOf(sid) !== -1,
       presetAllowed: (pid) => !t.presets || t.presets.indexOf(pid) !== -1,
+      // P5: LSP Planner scenario levels (lsp/lsp.js reads this).
+      lspLevelAllowed: (lid) => !t.lspLevels || t.lspLevels.indexOf(lid) !== -1,
       lockHint: (what) =>
         what + " is part of the full version - use “Unlock full version” in the header. " +
         "(In this showcase that is a local switch; a real deployment would verify a license or purchase here.)",
