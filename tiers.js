@@ -40,10 +40,12 @@
     demo: {
       id: "demo",
       label: "Demo",
-      // Palette: the P1 starter set only.
+      // Palette: the P1 element set — matching the starter demo layout, which
+      // places push/pull stations (demo users can re-add what they start with).
       palette: [
         "selective-racking", "block-stack",
         "dock-in", "dock-out", "staging", "conveyor",
+        "push-station", "pull-station",
       ],
       // Strategies: the two P1 slotting strategies only.
       strategies: ["random", "abc"],
