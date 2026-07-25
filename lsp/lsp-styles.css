@@ -1,0 +1,147 @@
+/* =====================================================================
+ * Logistics Flow Studio - LSP Planner - lsp-styles.css
+ * Additions on top of ../styles.css (shared design system). Same rules:
+ * system fonts only, no @import, no url(http...), no external refs.
+ * ===================================================================== */
+
+/* ---- Header back-link (anchor styled as a .btn) ---- */
+a.btn.back-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------------- Level list ---------------- */
+.level-list { display: flex; flex-direction: column; gap: 6px; }
+.lvl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--text);
+  width: 100%;
+}
+.lvl-item:hover { border-color: var(--accent); }
+.lvl-item.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lvl-id {
+  font-weight: 700;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--accent);
+  flex: none;
+  min-width: 22px;
+}
+.lvl-name { flex: 1; min-width: 0; }
+.lvl-best {
+  font-size: 0.66rem;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.lvl-best.passed { color: var(--ok); font-weight: 700; }
+.lvl-item.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+.lvl-item.locked:hover { border-color: var(--border); }
+.level-goal { margin-top: 10px; }
+.lvl-goal-text { font-size: 0.8rem; margin: 0 0 8px; }
+.lvl-thresholds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 0.68rem;
+}
+.lvl-th {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  font-family: var(--mono);
+}
+.lvl-lesson { font-size: 0.72rem; color: var(--text-dim); margin: 8px 0 0; }
+
+/* ---------------- Palette tweaks ---------------- */
+.pal-item.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pal-item.disabled:hover { border-color: var(--border); }
+
+/* ---------------- Score panel ---------------- */
+.score-out { margin-top: 12px; }
+.score-out .empty { color: var(--text-dim); font-size: 0.8rem; }
+.score-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.score-big {
+  font-size: 2rem;
+  font-weight: 800;
+  font-family: var(--mono);
+  line-height: 1;
+}
+.score-big .of { font-size: 0.8rem; color: var(--text-dim); font-weight: 600; }
+.score-stars { display: flex; gap: 2px; margin-top: 4px; }
+.star-glyph { color: var(--warn); }
+.star-glyph.off { color: var(--border); }
+.score-pass {
+  margin-left: auto;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.score-pass.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.score-pass.fail { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+
+/* weighted sub-scores */
+.wbars { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.wbar { display: grid; grid-template-columns: 108px 1fr 34px; gap: 8px; align-items: center; font-size: 0.72rem; }
+.wbar .wk { color: var(--text-dim); }
+.wbar .wk b { color: var(--text); }
+.wbar .track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.wbar .fillbar { height: 100%; border-radius: 999px; background: var(--accent); }
+.wbar.svc .fillbar { background: var(--accent-2); }
+.wbar.co2 .fillbar { background: var(--warn); }
+.wbar .wv { font-family: var(--mono); text-align: right; }
+
+/* pass/fail checks */
+.chk-list { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.chk {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.75rem;
+  padding: 4px 2px;
+  border-bottom: 1px dashed var(--border);
+}
+.chk .c-mark { flex: none; font-weight: 800; }
+.chk.ok .c-mark { color: var(--ok); }
+.chk.fail .c-mark { color: var(--danger); }
+.chk .c-label { flex: 1; }
+.chk .c-num { font-family: var(--mono); color: var(--text-dim); white-space: nowrap; }
+.chk.fail .c-num { color: var(--danger); }

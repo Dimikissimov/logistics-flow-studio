@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Logistics Flow Studio — LSP Planner</title>
+  <meta name="description" content="A game-like logistics-network planner: place sites, draw lanes, evaluate cost, service and CO2 estimates. Offline, deterministic, synthetic data." />
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)" />
+  <link rel="manifest" href="../manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="../icons/icon-192.png" />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="lsp-styles.css" />
+</head>
+<body>
+  <!-- ================= HEADER ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <!-- Inline, original SVG mark: an abstract network (nodes + lanes),
+           sibling of the WarehouseTwin mark. No third-party asset. -->
+      <svg class="brand-mark" viewBox="0 0 512 512" width="34" height="34" aria-hidden="true">
+        <rect x="0" y="0" width="512" height="512" rx="92" fill="#0f172a"/>
+        <path d="M128 256 L256 150 M256 150 L384 240 M128 256 L250 340 M250 340 L384 240 M384 240 L416 340"
+              fill="none" stroke="#f8fafc" stroke-width="16" stroke-linecap="round" opacity="0.55"/>
+        <circle cx="128" cy="256" r="52" fill="#2dd4bf"/>
+        <circle cx="256" cy="150" r="42" fill="#38bdf8"/>
+        <circle cx="250" cy="340" r="42" fill="#38bdf8"/>
+        <circle cx="384" cy="240" r="34" fill="#f8fafc"/>
+        <circle cx="416" cy="340" r="24" fill="#f8fafc" opacity="0.8"/>
+      </svg>
+      <div class="brand-text">
+        <h1>Logistics Flow Studio</h1>
+        <p>LSP Planner — network planning game <span class="tag">synthetic data</span></p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <!-- Same honest showcase gate as WarehouseTwin (../tiers.js): demo
+           plays L1-L2; a real deployment would verify a license here. -->
+      <span id="tierBadge" class="badge tier-badge">Demo version</span>
+      <button id="tierBtn" class="btn" type="button" title="Showcase switch — a real deployment would run a license/purchase check here">Unlock full version</button>
+      <button id="helpBtn" class="btn ghost" type="button" title="Show the quick guide">? Guide</button>
+      <a class="btn back-link" href="../index.html" title="Back to the warehouse-level app">&larr; WarehouseTwin</a>
+    </div>
+  </header>
+
+  <!-- ================= MAIN LAYOUT ================= -->
+  <main class="layout">
+    <!-- LEFT: levels + palette + design actions -->
+    <aside class="col left">
+      <section class="card">
+        <h2 class="card-title">Levels</h2>
+        <div id="levelList" class="level-list"><!-- filled by lsp.js --></div>
+        <div id="levelGoal" class="level-goal"><!-- goal + thresholds --></div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Palette</h2>
+        <p class="hint">Click a site type, then click the map. Pick <em>Draw lane</em>, then click site A and site B to connect them.</p>
+        <div id="palette" class="palette"><!-- filled by lsp.js --></div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Design</h2>
+        <div class="btn-grid">
+          <button id="saveBtn" class="btn" type="button" title="Save this level's design to the browser">Save</button>
+          <button id="loadBtn" class="btn" type="button" title="Load the saved design for this level">Load</button>
+          <button id="exportBtn" class="btn" type="button" title="Download the design as JSON">Export</button>
+          <button id="importBtn" class="btn" type="button" title="Load a design from a JSON file">Import</button>
+          <button id="clearBtn" class="btn danger" type="button" title="Remove everything you added (level sites stay)">Clear</button>
+          <button id="refBtn" class="btn" type="button" title="Load a sensible starter network for this level">Starter</button>
+        </div>
+        <input id="importInput" type="file" accept="application/json,.json" hidden />
+      </section>
+    </aside>
+
+    <!-- CENTER: the network map -->
+    <section class="col center">
+      <div class="canvas-toolbar">
+        <span id="modeBadge" class="badge">Mode: Select</span>
+        <span id="levelBadge" class="badge muted">Level: —</span>
+        <span id="netBadge" class="badge muted">0 sites · 0 lanes</span>
+        <span id="evalBadge" class="badge muted">Not evaluated</span>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="map" aria-label="Logistics network map editor"></canvas>
+      </div>
+      <p id="statusLine" class="status-line">Pick a level, place a DC, connect factory &rarr; DC &rarr; zones, then Evaluate.</p>
+    </section>
+
+    <!-- RIGHT: properties + evaluation + advisor + A/B -->
+    <aside class="col right">
+      <section class="card" id="propCard">
+        <h2 class="card-title">Properties</h2>
+        <div id="propPanel" class="prop-panel">
+          <p class="empty">Select a site or a lane to edit it.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Evaluate</h2>
+        <p class="hint">Deterministic, seeded evaluation: weekly transport + facility + holding cost, service vs the lead-time target, and a CO2 <strong>estimate</strong>. Same design &rarr; same numbers, every time.</p>
+        <button id="evalBtn" class="btn primary wide" type="button">&#9878; Evaluate network</button>
+        <div id="scoreOut" class="score-out"><p class="empty">Evaluate to see your score, the pass checks and the cost breakdown.</p></div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Advisor</h2>
+        <p class="hint">Explained heuristics from operations research — each hint names its principle (risk pooling, consolidation, push vs pull) and measures impact with the same deterministic evaluation. Not a trained model.</p>
+        <button id="adviseBtn" class="btn primary wide" type="button">Analyze network</button>
+        <div id="advisorOut" class="advisor-out"><p class="empty">Run an analysis to see the top ranked hints.</p></div>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Compare A/B</h2>
+        <p class="hint">Freeze the current design as A, keep editing, then compare — cost / service / CO2 / score deltas, same seed.</p>
+        <div class="btn-grid">
+          <button id="snapBtn" class="btn" type="button" title="Freeze the current design + its evaluation as A">Save as A</button>
+          <button id="compareBtn" class="btn primary" type="button" title="Evaluate the current design (B) and diff it against A">Compare</button>
+        </div>
+        <div id="abOut" class="ab-out"><p class="empty">Save a design as A first, then compare.</p></div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ================= ONBOARDING OVERLAY ================= -->
+  <div id="onboard" class="overlay" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+      <h2 id="obTitle">Welcome to LSP Planner</h2>
+      <p class="ob-sub">Design a logistics network like a game. Three steps and you have a score.</p>
+      <ol class="ob-steps">
+        <li><strong>1 · Place sites.</strong> The level fixes the factory and the customer zones (seeded demand). You add the middle: central DCs, regional DCs, cross-docks.</li>
+        <li><strong>2 · Connect lanes.</strong> Pick <em>Draw lane</em>, click site A, then site B. Set each lane to Full truckload (pay per truck) or Parcel/LTL (pay per tonne-km) — and each DC to push or pull replenishment.</li>
+        <li><strong>3 · Evaluate.</strong> One click computes weekly cost, service vs the lead-time target and a CO2 estimate — scored 0–100 with visible weights, plus pass/fail against the level's targets.</li>
+      </ol>
+      <p class="ob-note">The map is an abstract region — no real country, company or network. All demand is synthetic and seeded; costs and CO2 are estimates with stated assumptions. Fully offline.</p>
+      <div class="ob-actions">
+        <label class="ob-skip"><input type="checkbox" id="onboardDont" /> Don't show this again</label>
+        <button id="onboardClose" class="btn primary" type="button">Let's plan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom tooltip + toast -->
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- Local scripts only. Load order: tiers (shared gate module) ->
+       engine (pure evaluation, also runs in Node) -> UI. -->
+  <script src="../tiers.js"></script>
+  <script src="lsp-engine.js"></script>
+  <script src="lsp.js"></script>
+</body>
+</html>
