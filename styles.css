@@ -52,6 +52,11 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute must always win. Author display rules (e.g. the
+ * .overlay flexbox below) otherwise override the UA's [hidden] default
+ * in the cascade, leaving "hidden" elements visible and click-blocking. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;

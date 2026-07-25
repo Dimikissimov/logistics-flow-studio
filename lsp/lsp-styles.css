@@ -109,8 +109,10 @@ a.btn.back-link {
   border: 1px solid;
   white-space: nowrap;
 }
-.score-pass.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
-.score-pass.fail { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+/* Explicit border-color fallback first: browsers without color-mix()
+ * (Chrome <111, Safari <16.2) keep the solid pill-text color. */
+.score-pass.ok { color: var(--ok); border-color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.score-pass.fail { color: var(--warn); border-color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
 
 /* weighted sub-scores */
 .wbars { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }

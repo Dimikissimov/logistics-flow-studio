@@ -275,14 +275,17 @@
     if (def.stocking) site.mode = "pull"; // push/pull toggle per DC
     if (type === "zone" && site.fixed !== true) {
       // Player-added zone (free play): deterministic demand drawn from
-      // the level seed + the zone's placement index, then STORED on the
-      // site - evaluation never rolls dice.
+      // the level seed + this site's monotonic id number (idCounter was
+      // just incremented for this site and is never reused, so deleting
+      // and re-adding zones cannot duplicate another live zone's label
+      // or demand draw), then STORED on the site - evaluation never
+      // rolls dice.
       const level = levelById(design.levelId);
-      const idx = design.sites.filter((s) => s.type === "zone" && !s.fixed).length;
+      const idx = design.idCounter;
       const rng = mulberry32(((level ? level.seed : 1) ^ (0x51ab + idx * 0x9e37)) >>> 0);
       site.demandMean = Math.round(12 + rng() * 30);
       site.demandCv = Math.round((0.15 + rng() * 0.5) * 100) / 100;
-      site.label = "Zone +" + (idx + 1);
+      site.label = "Zone +" + idx;
     }
     design.sites.push(site);
     return site;

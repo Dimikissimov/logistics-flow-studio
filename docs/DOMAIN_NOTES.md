@@ -217,7 +217,7 @@ The FTL ceiling is the point: a 3 t/wk flow still pays (and emits) a whole truck
 
 ### Lead time and service
 
-Delivery lead time to a zone = dispatch at its serving stock point (0.5 d) + per leg: distance/speed + 0.2 d load/unload + 0.3 d per cross-dock dwell. A zone with **no stocking DC** on its path waits for make-to-order production at the factory (+2.5 d) — that is what a DC decouples. Coverage = 1 within the level's lead-time target, then falls linearly to 0 at 3× target. Zone service = coverage × the serving DC's fill rate; network **service level is the demand-weighted average**.
+Delivery lead time to a zone = dispatch at its serving stock point (0.5 d) + per leg: distance/speed + 0.2 d load/unload + 0.3 d per cross-dock dwell + **0.75 d per stocking DC passed through without stopping stock there** (an intermediate DC that is not the zone's serving stock point adds dwell, on delivery and replenishment paths alike). A zone with **no stocking DC** on its path waits for make-to-order production at the factory (+2.5 d) — that is what a DC decouples. Coverage = 1 within the level's lead-time target, then falls linearly to 0 at 3× target. Zone service = coverage × the serving DC's fill rate; network **service level is the demand-weighted average**.
 
 ### Inventory: base-stock safety stock + square-root pooling
 
