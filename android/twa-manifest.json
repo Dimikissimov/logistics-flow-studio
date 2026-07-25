@@ -1,0 +1,43 @@
+{
+  "packageId": "de.kisimov.warehousetwin",
+  "host": "REPLACE-WITH-YOUR-PWA-HOST.example.com",
+  "name": "WarehouseTwin",
+  "launcherName": "WarehouseTwin",
+  "display": "standalone",
+  "themeColor": "#0f172a",
+  "themeColorDark": "#0f172a",
+  "navigationColor": "#0f172a",
+  "navigationColorDark": "#0f172a",
+  "navigationDividerColor": "#0f172a",
+  "navigationDividerColorDark": "#0f172a",
+  "backgroundColor": "#0f172a",
+  "enableNotifications": false,
+  "startUrl": "/logistics-flow-studio/index.html",
+  "iconUrl": "https://REPLACE-WITH-YOUR-PWA-HOST.example.com/logistics-flow-studio/icons/icon-512.png",
+  "maskableIconUrl": "https://REPLACE-WITH-YOUR-PWA-HOST.example.com/logistics-flow-studio/icons/maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "warehousetwin"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://REPLACE-WITH-YOUR-PWA-HOST.example.com/logistics-flow-studio/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://REPLACE-WITH-YOUR-PWA-HOST.example.com/logistics-flow-studio/",
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "1.0.0"
+}
