@@ -2,7 +2,7 @@
 
 WarehouseTwin is a small, honest **warehouse digital-twin simulator** you can play with in a browser. I built it to feel game-like and immediately usable: drop racks and dock doors onto a floor, pick a slotting strategy, hit **Run**, and watch the numbers move. It installs as an offline app and holds no company's IP — every icon and line of code here is original or permissively licensed, and every number is synthetic and seeded so you can reproduce it exactly.
 
-This is a multi-pass build. **Pass 1 (the foundation)**, **Pass 2 (the decision-support layer)** and **Pass 3 (domain depth)** are shipped; Passes 4–5 are mapped out in the roadmap below and left with clear hooks in the code, not faked in the UI.
+This is a multi-pass build. **Pass 1 (the foundation)**, **Pass 2 (the decision-support layer)**, **Pass 3 (domain depth)** and **Pass 4 (Android delivery + the demo/full tier gate)** are shipped; Pass 5 is mapped out in the roadmap below and left with clear hooks in the code, not faked in the UI.
 
 ## What it is
 
@@ -34,6 +34,11 @@ The full storage-systems palette, material-flow chains, and inventory dynamics �
 - **One-click preset: "Industrial MRO distributor (illustrative)"** — a large layout (rack rows, deep-lane blocks, AS/RS aisle + shuttle, conveyor spine, push/pull stations, pack station, both docks) with an 80/20-skewed demand profile. *Independent, illustrative, based on public information about the industry segment — not affiliated with or endorsed by Würth or any real company.*
 - **Advisor grew new rules**: broken-chain findings, LIFO-share vs FIFO-critical SKUs, carton-flow for high-velocity small parts, an AS/RS-needs-a-takeaway-conveyor check, and a **measured push-vs-pull comparison** using the same sim.
 
+### Pass 4 — Android delivery + demo/full tiers (new)
+
+- **Demo/full tier gate — honestly framed.** The app opens in a **demo tier**: the palette is limited to the starter six elements (selective racking, block-stack, both docks, staging, conveyor), slotting to Random + ABC, the MRO preset is locked, and the advisor shows its top 2 suggestions. Locked items are **never hidden** — they render greyed with an original padlock glyph and explain how to unlock. The header's **"Unlock full version"** button flips the tier. *Honesty note:* this is a **client-side showcase gate, not DRM** — it is a `localStorage` flag anyone can flip in DevTools, and the code says so. Its purpose is engineering demonstration: all gating flows through **one capability-flag module (`tiers.js`)** — palette, strategy selects, preset button and advisor read flags, no scattered if-statements — which is exactly the seam where a real deployment would plug in a license/purchase check (documented in `PUBLISH_ANDROID.md`). The gate never touches the simulation: the same config gives byte-identical KPIs in both tiers.
+- **Android packaging scaffold** (`android/`): a pre-filled Bubblewrap `twa-manifest.json` (placeholder package id, colors/URLs matching the web manifest), a Digital Asset Links template, and a guide. Config and docs only — no AAB is checked in; building, signing and store submission are the owner's steps, walked through honestly in [`PUBLISH_ANDROID.md`](PUBLISH_ANDROID.md).
+
 ## Design philosophy
 
 I wanted the opposite of a dense enterprise tool: something a newcomer can understand in under a minute. So the whole app is one screen — palette on the left, floor in the middle, properties and the simulation on the right — with a three-step onboarding card and tooltips on every palette item. The goal is **radically intuitive and game-like**: you learn the domain by playing with it, not by reading a manual.
@@ -60,13 +65,15 @@ It's static — no server or build step required.
   ```
   then visit `http://localhost:8000/`. Now it precaches itself and works offline, and the **Install app** button appears when your browser offers installation.
 
-## Install on Android (as a PWA, today)
+## Install on Android
+
+**Now, as a PWA (zero cost):**
 
 1. Serve the folder over http(s) (or host it) and open it in Chrome on Android.
 2. Use the **Install app** button in the header, or the browser menu → **Install app / Add to Home screen**.
 3. It installs with its own icon and launches standalone, fully offline.
 
-Getting it into the **Google Play Store** is a separate packaging step (a TWA wrap) planned for Pass 4 — the honest path is written up in [`PUBLISH_ANDROID.md`](PUBLISH_ANDROID.md).
+**Play Store path (TWA wrap):** the packaging scaffold ships in [`android/`](android/) — a pre-filled Bubblewrap config and a Digital Asset Links template. The complete step-by-step (hosting the PWA, building the signed AAB, the $25 developer account, store submission — with every owner-only step marked) is in [`PUBLISH_ANDROID.md`](PUBLISH_ANDROID.md). No built AAB is included: signing and submission belong to the app owner.
 
 ## Honesty notes
 
@@ -77,12 +84,12 @@ Getting it into the **Google Play Store** is a separate packaging step (a TWA wr
 
 ## Roadmap
 
-Passes 1–3 are shipped. Planned next:
+Passes 1–4 are shipped. Planned next:
 
 - **P1 — Foundation. ✅ Done.** PWA shell, interactive canvas, domain model, seeded simulation, KPIs.
 - **P2 — Advisor + comparative + optimiser + standards panel. ✅ Done.** A heuristic (rule-based, explainable) layout advisor, an A/B predictor that runs two configurations and diffs the KPIs, a spatial-layout optimiser that pulls storage into the golden zone to cut pick travel, and a German-standards panel with a live DIN 15185 aisle check — all *informed by*, not certified. See `advisor.js`, `optimizer.js`, and the Pass 2 panels in the app.
 - **P3 — Domain depth. ✅ Done.** All twelve storage systems with sim-relevant characteristics (selectivity, FIFO/LIFO, handling deltas, goods-to-person cycles), validated material-flow chains with flow arrows and broken-chain warnings, simulated push-vs-pull pick-face inventory (stockouts vs overstock), zone/batch/wave picking, the carton/tote catalog with cartons-per-pallet math, and the illustrative MRO-distributor preset. Every model simplification is written down in `docs/DOMAIN_NOTES.md` — it remains a teaching twin, not a WMS.
-- **P4 — Android / TWA package.** Wrap the PWA with Bubblewrap into a signed AAB for the Play Store. Packaging only; see `PUBLISH_ANDROID.md`.
+- **P4 — Android delivery + tiers. ✅ Done.** The demo/full tier gate (`tiers.js` — one capability-flag module; locked items visible with an original padlock, honestly documented as a showcase gate, not DRM) and the Bubblewrap/TWA packaging scaffold (`android/` + the rewritten `PUBLISH_ANDROID.md`). Docs and config only on the store side — the signing key, developer account and submission are the owner's, marked as such.
 - **P5 — LSP Planner.** A higher-level logistics-network / planning layer that consumes exported layouts.
 
 ## Licence
