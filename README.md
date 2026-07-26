@@ -4,6 +4,8 @@ WarehouseTwin is a small, honest **warehouse digital-twin simulator** you can pl
 
 ![WarehouseTwin — the starter demo layout on the canvas floor plan, with the palette, properties panel and simulation controls](docs/img/warehousetwin.png)
 
+Two numbers up front, both measured on the seeded starter demo layout and reproducible from [`docs/MEASUREMENTS.md`](docs/MEASUREMENTS.md): **ABC 80/20 slotting beats random by ~21%** on pick travel, and the one-click layout optimizer measured **36.70 → 18.85 m/order (−48.6%)** — synthetic data, deterministic, same seed → same result.
+
 This is a multi-pass build, and all five passes are shipped: **Pass 1 (the foundation)**, **Pass 2 (the decision-support layer)**, **Pass 3 (domain depth)**, **Pass 4 (Android delivery + the demo/full tier gate)** and **Pass 5 (LSP Planner — the network-level planning game at [`lsp/`](lsp/), linked from the header)**.
 
 ## The engine counterpart
