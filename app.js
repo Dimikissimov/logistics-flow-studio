@@ -34,8 +34,11 @@
       demandSkew: 1.0, // P3: Zipf exponent (presets may skew harder)
       palletType: "EUR1", // P3: unit-load catalog selection
       boxType: "EURO-CASE",
+      wagePerHour: 22, // labour-cost KPI: fully-loaded picker wage, EUR/h
+      weeklyOrders: 1500, // labour-cost KPI: assumed order volume per week
     },
     lastResult: null,
+    resultStale: false, // true when layout/settings changed after a run
     drag: null, // {id, offsetX, offsetY, moved}
     preview: null, // optimizer proposal: [{id,type,x,y,w,d}] shown as ghosts
   };
@@ -168,7 +171,12 @@
       ctx.fillStyle = COLORS.text;
       ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
       ctx.textBaseline = "top";
-      const label = shortLabel(e.type);
+      let label = shortLabel(e.type);
+      // Docks are the I/O anchors: never let "Dock IN/OUT" truncate to an
+      // ambiguous "Doc…" — fall back to the unambiguous IN / OUT.
+      if ((e.type === "dock-in" || e.type === "dock-out") && ctx.measureText(label).width > pw - 10) {
+        label = e.type === "dock-in" ? "IN" : "OUT";
+      }
       if (pw > 30 && ph > 14) {
         clipText(label, px + 6, py + 5, pw - 10);
         if (def.category === "storage" && ph > 30) {
@@ -228,9 +236,21 @@
       ctx.restore();
     }
 
-    // I/O marker
+    // I/O marker. When the point sits inside a dock (the usual case) the
+    // diamond used to cover the dock's own IN/OUT label — hop it to the
+    // dock's floor-facing side so both stay readable.
     const io = ioPoint();
-    const ix = io.x * cellPx, iy = io.y * cellPx;
+    const ix = io.x * cellPx;
+    let iy = io.y * cellPx;
+    const host = state.elements.find(
+      (e) => (e.type === "dock-out" || e.type === "dock-in") &&
+        io.x >= e.x * CELL_M && io.x <= (e.x + e.w) * CELL_M &&
+        io.y >= e.y * CELL_M && io.y <= (e.y + e.d) * CELL_M
+    );
+    if (host) {
+      const dockInLowerHalf = host.y + host.d / 2 > GRID_H / 2;
+      iy = dockInLowerHalf ? host.y * cellPx - 9 : (host.y + host.d) * cellPx + 9;
+    }
     ctx.save();
     ctx.fillStyle = COLORS.io;
     ctx.beginPath();
@@ -570,12 +590,78 @@
     render();
   }
 
+  // Duplicate the selected element into the nearest free spot (adjacent
+  // sides first, then an outward ring scan). Real layouts are rows of
+  // identical racks — duplicate + arrow-nudge beats re-placing each one.
+  function duplicateSelected() {
+    const el = state.elements.find((e) => e.id === state.selectedId);
+    if (!el) return;
+    const spot = findFreeSpotNear(el);
+    if (!spot) { toast("No free space on the floor for a copy.", "warn"); return; }
+    const copy = { id: "el-" + ++state.idCounter, type: el.type, x: spot.x, y: spot.y, w: el.w, d: el.d };
+    state.elements.push(copy);
+    selectElement(copy.id);
+    scheduleSave();
+    render();
+    status("Duplicated " + ELEMENTS[el.type].label + " — drag it, or nudge with the arrow keys (1 m per step).");
+  }
+
+  function findFreeSpotNear(el) {
+    const fits = (x, y) => {
+      const cand = { x, y, w: el.w, d: el.d };
+      return inBounds(cand) && !overlapsAny(cand, null) ? cand : null;
+    };
+    const adjacent = [
+      [el.x, el.y + el.d], // below (next rack row)
+      [el.x + el.w, el.y], // right
+      [el.x, el.y - el.d], // above
+      [el.x - el.w, el.y], // left
+    ];
+    for (const [x, y] of adjacent) { const c = fits(x, y); if (c) return c; }
+    for (let r = 1; r <= Math.max(GRID_W, GRID_H); r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const c = fits(el.x + dx, el.y + dy);
+          if (c) return c;
+        }
+      }
+    }
+    return null;
+  }
+
+  // Arrow-key nudge: move the selected element by 1 cell (= 1 m) with
+  // the same bounds/overlap vetoes as dragging.
+  function nudgeSelected(dx, dy) {
+    const el = state.elements.find((e) => e.id === state.selectedId);
+    if (!el) return;
+    const cand = { x: el.x + dx, y: el.y + dy, w: el.w, d: el.d };
+    if (!inBounds(cand) || overlapsAny(cand, el.id)) return; // silently veto, like drag
+    el.x = cand.x;
+    el.y = cand.y;
+    scheduleSave();
+    render();
+    renderProps();
+  }
+
+  const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
   window.addEventListener("keydown", (e) => {
     if (e.target && /input|select|textarea/i.test(e.target.tagName)) return;
     if (e.key === "Escape") { setTool(null); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
       e.preventDefault();
       deleteSelected();
+      return;
+    }
+    if (ARROWS[e.key] && state.selectedId) {
+      e.preventDefault(); // keep the page from scrolling
+      nudgeSelected(ARROWS[e.key][0], ARROWS[e.key][1]);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D") && state.selectedId) {
+      e.preventDefault(); // browser bookmark shortcut
+      duplicateSelected();
     }
   });
 
@@ -679,15 +765,18 @@
       `<p class="prop-desc">${def.desc}</p>` +
       sizeEditor +
       '<div class="prop-actions">' +
+      '<button id="dupBtn" class="btn" type="button" title="Copy this element next to itself (Ctrl+D). Arrow keys nudge 1 m.">Duplicate</button>' +
       (def.resizable ? '<button id="rotateBtn" class="btn" type="button">Rotate</button>' : "") +
       '<button id="deleteBtn" class="btn danger" type="button">Delete</button>' +
-      "</div>";
+      "</div>" +
+      '<p class="hint" style="margin-bottom:0">Arrow keys nudge the selection 1 m; Ctrl+D duplicates.</p>';
 
     if (def.resizable) {
       $("pW").addEventListener("change", () => applySize());
       $("pD").addEventListener("change", () => applySize());
       $("rotateBtn").addEventListener("click", () => rotateSelected());
     }
+    $("dupBtn").addEventListener("click", duplicateSelected);
     $("deleteBtn").addEventListener("click", deleteSelected);
   }
 
@@ -736,10 +825,32 @@
     }
   }
 
+  // Staleness cue: once a run is displayed, any layout mutation or
+  // sim-relevant setting change marks the KPI panel stale (amber note +
+  // dimmed numbers) instead of silently showing outdated results.
+  // Cleared by the next renderKPIs (Run / Apply-optimize re-runs).
+  function markKPIsStale() {
+    if (!state.lastResult || state.resultStale) return;
+    state.resultStale = true;
+    const kpi = $("kpi");
+    if (!kpi.querySelector(".stale-note")) {
+      const note = document.createElement("div");
+      note.className = "stale-note";
+      note.textContent = "Layout or settings changed since this run — these numbers are stale. Run the simulation again.";
+      kpi.prepend(note);
+      kpi.classList.add("stale");
+    }
+  }
+
   function renderKPIs(res) {
     const kpi = $("kpi");
+    state.resultStale = false; // fresh numbers — drop the stale marker
+    kpi.classList.remove("stale");
     const cpp = D.cartonsPerPallet(state.config.boxType, state.config.palletType);
     const estCartons = res.palletPositionsTotal * cpp.perPallet;
+    const wage = Math.max(0, Number(state.config.wagePerHour) || 0);
+    const weekly = Math.max(1, Math.round(Number(state.config.weeklyOrders) || 1));
+    const eurPerOrder = ((res.labourSecPerOrder || 0) / 3600) * wage;
     const cards = [
       kcard("Throughput", res.throughputOrdersPerHour.toFixed(1), "orders / hr"),
       kcard("Avg pick travel", res.avgPickTravelM.toFixed(1), "m / order"),
@@ -749,6 +860,8 @@
       kcard("Overstock returns", String(res.overstockUnits), "units"),
       kcard("Avg face stock", res.avgFaceStockPct.toFixed(0), "% of capacity"),
       kcard("Chain-assisted", res.chainAssistedLinesPct.toFixed(0), "% of lines"),
+      kcard("Labour cost", eurPerOrder.toFixed(2), "EUR / order (est.)"),
+      kcard("Labour / week", Math.round(eurPerOrder * weekly).toLocaleString("en-US"), "EUR (est.)"),
     ];
     const skewTxt = res.params.demandSkew && res.params.demandSkew !== 1 ? `, demand skew ${res.params.demandSkew}` : "";
     const note =
@@ -757,6 +870,8 @@
       `${(res.flowMode || "pull").toUpperCase()} replenishment` +
       (res.params.pullLeadOrders ? ` (lead ${res.params.pullLeadOrders} orders)` : "") +
       `. Capacity ≈ ${estCartons.toLocaleString("en-US")} cartons of type ${state.config.boxType} on ${state.config.palletType}. ` +
+      `Labour cost = simulated picker time (travel + handling + waits) × ${wage} EUR/h loaded wage; ` +
+      `the weekly figure assumes ${weekly.toLocaleString("en-US")} orders/wk — an estimate, not a quote. ` +
       `Same seed → identical KPIs.</p>`;
     kpi.innerHTML = cards.join("") + note;
   }
@@ -1018,7 +1133,12 @@
     fillStrategySelect(sel);
     sel.value = state.config.strategy;
     updateStrategyDesc();
-    sel.addEventListener("change", () => { state.config.strategy = sel.value; updateStrategyDesc(); });
+    sel.addEventListener("change", () => {
+      state.config.strategy = sel.value;
+      updateStrategyDesc();
+      markKPIsStale();
+      status("Strategy set to " + ((D.STRATEGIES[sel.value] || {}).label || sel.value) + " — applies on the next Run.");
+    });
 
     const ap = $("aislePreset");
     ap.innerHTML = "";
@@ -1048,9 +1168,35 @@
       render();
     });
 
-    $("seedInput").addEventListener("change", readConfigFromUI);
-    $("ordersInput").addEventListener("change", readConfigFromUI);
-    $("skuInput").addEventListener("change", readConfigFromUI);
+    // Sim inputs: acknowledge every edit in the status line (and mark
+    // any displayed KPIs stale) so the user can see the change "took"
+    // before the next Run.
+    const onSimInput = () => {
+      readConfigFromUI();
+      markKPIsStale();
+      status(
+        "Sim settings: seed " + state.config.seed + ", " + state.config.orders + " orders, " +
+        state.config.skuCount + " SKUs — applied on the next Run."
+      );
+    };
+    $("seedInput").addEventListener("change", onSimInput);
+    $("ordersInput").addEventListener("change", onSimInput);
+    $("skuInput").addEventListener("change", onSimInput);
+
+    // Labour-cost inputs: pure display math over the last run, so they
+    // can update the two labour KPI cards live (unless the panel is
+    // already stale for other reasons — then the stale note stays).
+    const onLabourInput = () => {
+      readConfigFromUI();
+      if (state.lastResult && state.lastResult.ok && !state.resultStale) {
+        renderKPIs(state.lastResult);
+        status("Labour rate " + state.config.wagePerHour + " EUR/h at " + state.config.weeklyOrders + " orders/wk — labour KPIs updated.");
+      } else {
+        status("Labour rate " + state.config.wagePerHour + " EUR/h at " + state.config.weeklyOrders + " orders/wk — shows after the next Run.");
+      }
+    };
+    $("wageInput").addEventListener("change", onLabourInput);
+    $("weeklyOrdersInput").addEventListener("change", onLabourInput);
 
     // P3: push vs pull replenishment toggle
     const fm = $("flowModeSelect");
@@ -1058,7 +1204,11 @@
       '<option value="pull">Pull — replenish on consumption (reorder point)</option>' +
       '<option value="push">Push — replenish to forecast (periodic top-up)</option>';
     fm.value = state.config.flowMode;
-    fm.addEventListener("change", () => { state.config.flowMode = fm.value; });
+    fm.addEventListener("change", () => {
+      state.config.flowMode = fm.value;
+      markKPIsStale();
+      status("Replenishment set to " + fm.value.toUpperCase() + " — applies on the next Run.");
+    });
 
     // P3: unit-load catalog (pallet + carton/tote selects feed the
     // cartons-per-pallet math shown in properties, KPIs and the table).
@@ -1126,6 +1276,8 @@
     state.config.flowMode = $("flowModeSelect").value === "push" ? "push" : "pull";
     state.config.palletType = $("palletSelect").value;
     state.config.boxType = $("boxSelect").value;
+    state.config.wagePerHour = Math.max(0, Number($("wageInput").value) || 0);
+    state.config.weeklyOrders = Math.max(1, Math.round(Number($("weeklyOrdersInput").value) || 1));
   }
 
   function pushConfigToUI() {
@@ -1140,6 +1292,8 @@
     $("flowModeSelect").value = state.config.flowMode;
     $("palletSelect").value = state.config.palletType;
     $("boxSelect").value = state.config.boxType;
+    $("wageInput").value = state.config.wagePerHour;
+    $("weeklyOrdersInput").value = state.config.weeklyOrders;
     renderCatalog();
     updateStrategyDesc();
   }
@@ -1199,11 +1353,14 @@
         demandSkew: numOr(obj.config.demandSkew, state.config.demandSkew),
         palletType: D.PALLETS.some((p) => p.id === obj.config.palletType) ? obj.config.palletType : state.config.palletType,
         boxType: D.BOXES.some((b) => b.id === obj.config.boxType) ? obj.config.boxType : state.config.boxType,
+        wagePerHour: Math.max(0, numOr(obj.config.wagePerHour, state.config.wagePerHour)),
+        weeklyOrders: Math.max(1, Math.round(numOr(obj.config.weeklyOrders, state.config.weeklyOrders))),
       });
     }
     pushConfigToUI();
     renderProps();
     render();
+    markKPIsStale(); // any displayed KPIs describe the previous layout
     if (source) status("Loaded layout from " + source + ".");
   }
 
@@ -1215,6 +1372,11 @@
   function numOr(v, d) { const n = Number(v); return isNaN(n) ? d : n; }
 
   function scheduleSave() {
+    // Every scheduleSave call site is a layout/config mutation, so the
+    // displayed KPIs (if any) stop describing the floor — mark them
+    // stale synchronously (config-only changes that skip scheduleSave
+    // call markKPIsStale directly in their listeners).
+    markKPIsStale();
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       try { localStorage.setItem(LS_KEY, JSON.stringify(serialize())); } catch (_) {}
@@ -1296,7 +1458,14 @@
     renderProps();
     render();
     scheduleSave();
-    status("Loaded the starter demo layout. Try Run simulation, then switch strategy and compare.");
+    // The starter ships with its conveyor and stations deliberately
+    // unconnected — say so, or the 5 chain warnings read as a bug.
+    status(
+      "Starter layout loaded. The conveyor and push/pull stations start DISCONNECTED on purpose — " +
+      "that is what the 'Flow: 5 chain issues' badge is flagging. Drag them into a chain " +
+      "(storage → conveyor → station → outbound dock) to fix it, or just Run the simulation as-is."
+    );
+    toast("Heads-up: the starter's 5 flow warnings are the exercise, not a bug — hover the Flow badge.", "warn");
   }
 
   // ================================================================
@@ -1371,7 +1540,8 @@
     t.className = "toast" + (kind ? " " + kind : "");
     t.hidden = false;
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+    // Reading time scales with length (2.6s floor, 7s cap).
+    toastTimer = setTimeout(() => { t.hidden = true; }, Math.max(2600, Math.min(7000, msg.length * 45)));
   }
 
   function status(msg) {
@@ -1385,10 +1555,32 @@
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    $("installBtn").hidden = false;
+    const b = $("installBtn");
+    b.hidden = false;
+    b.className = "btn primary";
+    b.title = "Install as an offline app";
   });
+  // The install button used to stay hidden unless beforeinstallprompt
+  // fired — i.e. it never appeared over file:// or in Firefox/Safari,
+  // with no hint why. Now it is always visible: muted until the browser
+  // offers install, and clicking it explains honestly what is missing.
+  function initInstallButton() {
+    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return; // already installed
+    const b = $("installBtn");
+    if (deferredPrompt) return; // beforeinstallprompt already fired
+    b.hidden = false;
+    b.className = "btn ghost";
+    b.title = "Installing needs the app served over http(s) in a Chromium browser — click for details";
+  }
   $("installBtn").addEventListener("click", async () => {
-    if (!deferredPrompt) { toast("Use your browser menu → Install app.", "warn"); return; }
+    if (!deferredPrompt) {
+      if (location.protocol !== "http:" && location.protocol !== "https:") {
+        toast("Install needs the app served over http(s), e.g. python -m http.server, in Edge/Chrome. Opened from file:// the browser never offers it.", "warn");
+      } else {
+        toast("No install prompt from this browser. Edge/Chrome: browser menu → Apps → Install. Firefox/Safari do not offer PWA install.", "warn");
+      }
+      return;
+    }
     deferredPrompt.prompt();
     await deferredPrompt.userChoice;
     deferredPrompt = null;
@@ -1511,6 +1703,7 @@
     // selects, preset button, tier badge). Default tier is "demo".
     applyTier();
     maybeShowOnboard();
+    initInstallButton();
     registerSW();
 
     // responsive + theme

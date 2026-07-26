@@ -50,7 +50,7 @@
     <aside class="col left">
       <section class="card">
         <h2 class="card-title">Palette</h2>
-        <p class="hint">Click an item, then click the floor to place it. Drag to move. Select to edit.</p>
+        <p class="hint">Click an item, then click the floor to place it. Drag to move. Select to edit — arrow keys nudge 1 m, Ctrl+D (or the Duplicate button) copies.</p>
         <div id="palette" class="palette"><!-- filled by app.js --></div>
       </section>
 
@@ -129,6 +129,17 @@
           <select id="flowModeSelect"></select>
         </div>
         <p class="hint">Push tops pick faces up on a periodic forecast (can overstock and run dry between cycles); pull replenishes on consumption via a reorder point. Both are simulated on the pick-face inventory — see the stockout / overstock KPIs.</p>
+        <div class="field-row">
+          <div class="field">
+            <label for="wageInput">Wage (EUR/h, loaded)</label>
+            <input id="wageInput" type="number" value="22" min="0" step="0.5" />
+          </div>
+          <div class="field">
+            <label for="weeklyOrdersInput">Orders / week</label>
+            <input id="weeklyOrdersInput" type="number" value="1500" min="1" step="50" />
+          </div>
+        </div>
+        <p class="hint">Feeds the labour-cost KPI: EUR/order = simulated picker time × wage; the weekly figure scales it by your order volume. An estimate for comparing layouts — not a quote.</p>
         <button id="runBtn" class="btn primary wide" type="button">▶ Run simulation</button>
         <div id="kpi" class="kpi"><!-- filled after a run --></div>
       </section>
@@ -211,7 +222,7 @@
       <h2 id="obTitle">Welcome to WarehouseTwin</h2>
       <p class="ob-sub">A tiny, honest warehouse digital twin. Three steps and you are running.</p>
       <ol class="ob-steps">
-        <li><strong>1 · Place racks &amp; docks.</strong> Click a palette item, then click the floor. Drag to move, keep a valid aisle between rack rows. Chain conveyors from storage to a pack station and the outbound dock — flow arrows show what is connected.</li>
+        <li><strong>1 · Place racks &amp; docks.</strong> Click a palette item, then click the floor. Drag to move, keep a valid aisle between rack rows. Chain conveyors from storage to a pack station and the outbound dock — flow arrows show what is connected. <em>The starter layout begins with its conveyor and stations disconnected on purpose: fixing its five flow warnings is your first exercise.</em></li>
         <li><strong>2 · Pick strategies.</strong> Choose slotting/picking (Random, ABC, Zone, Batch, Wave) and push vs pull replenishment on the right — or load the MRO preset for a full layout.</li>
         <li><strong>3 · Run the sim.</strong> Hit Run to see throughput, pick travel, storage fill, stockouts and overstock. Same seed → same result.</li>
       </ol>

@@ -461,6 +461,11 @@
       palletPositionsTotal: positionsTotal,
       ordersServed: ordersServed,
       linesPicked: totalLines,
+      // Person-time per order actually simulated: travel + handling +
+      // stockout penalties + strategy overheads + goods-to-person wait
+      // (the operator stands at the port during the machine cycle).
+      // Consumed by the labour-cost KPI (time x wage) in the shell.
+      labourSecPerOrder: ordersServed > 0 ? totalSeconds / ordersServed : 0,
       // --- P3 KPIs ---
       stockoutLines: stockoutLines,
       stockoutPct: totalLines > 0 ? (stockoutLines / totalLines) * 100 : 0,
