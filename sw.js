@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v9"; // R2: heatmap overlay + run history (index/app/simulation/styles changed)
+const CACHE_VERSION = "wt-v10"; // W2: shareable layout links (index/app changed, share.js added)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -19,6 +19,7 @@ const APP_SHELL = [
   "./simulation.js",
   "./optimizer.js",
   "./advisor.js",
+  "./share.js",
   "./app.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",

@@ -64,6 +64,8 @@
           <button id="clearBtn" class="btn danger" type="button" title="Remove all elements">Clear</button>
           <button id="demoBtn" class="btn" type="button" title="Load the starter demo layout">Demo</button>
         </div>
+        <button id="shareBtn" class="btn wide" type="button" title="Copy a link that carries this whole layout inside its #layout= URL fragment — offline, nothing is uploaded, no server involved">Share layout link</button>
+        <p class="hint">The link <em>is</em> the data: the whole design travels in the URL's <strong>#layout=…</strong> fragment. Nothing is uploaded and no server is involved — opening the link rebuilds the layout locally (same validation as JSON import). Combines with <strong>?tour=off</strong>.</p>
         <button id="presetBtn" class="btn wide" type="button" style="margin-top:8px">Preset: Industrial MRO distributor</button>
         <p class="hint">An <em>illustrative</em> large-distributor layout (rack rows, AS/RS aisle, conveyor spine, push/pull stations, both docks) with 80/20-skewed demand. Independent, based on public information about the industry segment — <strong>not affiliated with or endorsed by Würth</strong> or any real company.</p>
         <input id="importInput" type="file" accept="application/json,.json" hidden />
@@ -247,14 +249,16 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> app.
+  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> share -> app.
        (advisor uses the optimizer; both use domain + sim; app reads the
-        tier capability flags from tiers.js.) -->
+        tier capability flags from tiers.js and the share-link codec
+        from share.js.) -->
   <script src="domain.js"></script>
   <script src="tiers.js"></script>
   <script src="simulation.js"></script>
   <script src="optimizer.js"></script>
   <script src="advisor.js"></script>
+  <script src="share.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1609,6 +1609,81 @@
     reader.readAsText(file);
   }
 
+  // ---- Shareable layout links (the URL fragment IS the data) -------
+  // Encoding (share.js): the exact serialize() schema, minus the save
+  // timestamp -> JSON -> UTF-8 -> base64url, placed in location.hash
+  // as #layout=... Nothing is uploaded: browsers never send the
+  // fragment over the network, and this app makes zero network
+  // requests anyway. Decoding runs through deserialize() - the SAME
+  // validation as JSON import (type whitelist, bounds, tier coercion).
+  function buildShareHash() {
+    const obj = serialize();
+    delete obj.savedAt; // a share link is content, not a save event
+    return "#" + WT.share.HASH_KEY + "=" + WT.share.encodeLayout(obj);
+  }
+
+  function copyText(text) {
+    // navigator.clipboard needs a secure context (it is absent over
+    // file://); fall back to the classic hidden-textarea copy.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(() => true, () => copyTextFallback(text));
+    }
+    return Promise.resolve(copyTextFallback(text));
+  }
+
+  function copyTextFallback(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  function shareLayout() {
+    readConfigFromUI(); // the link carries the settings exactly as shown
+    const hash = buildShareHash();
+    // Put the fragment into the address bar (keeps ?tour=off etc.).
+    try { history.replaceState(null, "", hash); } catch (_) { location.hash = hash; }
+    const url = location.href.split("#")[0] + hash;
+    copyText(url).then((ok) => {
+      toast(
+        ok
+          ? "Link copied (" + url.length + " chars). The design lives IN the link's #layout= fragment - nothing was uploaded, no server involved."
+          : "Could not copy automatically - the link is in the address bar now, copy it from there. (The design lives in the #layout= fragment; nothing is uploaded.)",
+        ok ? undefined : "warn"
+      );
+    });
+    status("Share link ready - the URL fragment holds the whole design (offline, no upload).");
+  }
+
+  // Boot path: a #layout= fragment loads the design carried in the URL.
+  function loadFromShareHash() {
+    const payload = WT.share.payloadFromHash(location.hash);
+    if (payload === null) return false;
+    // Clear the fragment either way so a refresh doesn't re-apply it
+    // over later edits (the ?query part - e.g. ?tour=off - stays).
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
+    try {
+      deserialize(WT.share.decodeLayout(payload), "share link");
+      scheduleSave(); // same behaviour as JSON import
+      toast("Layout loaded from link - nothing was uploaded; the design lives in the URL itself.");
+      return true;
+    } catch (err) {
+      // demoLayout()/loadSaved() run right after this returns and raise
+      // their own toasts - defer ours so the ERROR is what the user
+      // actually sees (the honest failure beats the starter heads-up).
+      const msg = "This share link is unreadable (" + err.message + ") - the app started normally instead.";
+      setTimeout(() => toast(msg, "err"), 0);
+      return false;
+    }
+  }
+
   // ================================================================
   // DEMO LAYOUT (first-run starter so the sim works immediately)
   // ================================================================
@@ -1834,6 +1909,7 @@
     $("saveBtn").addEventListener("click", saveNow);
     $("loadBtn").addEventListener("click", () => loadSaved(false));
     $("exportBtn").addEventListener("click", exportJSON);
+    $("shareBtn").addEventListener("click", shareLayout);
     $("importBtn").addEventListener("click", () => $("importInput").click());
     $("importInput").addEventListener("change", (e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; });
     $("clearBtn").addEventListener("click", () => {
@@ -1876,8 +1952,8 @@
     wireButtons();
     pushConfigToUI();
     resizeCanvas();
-    // load saved or seed demo
-    if (!loadSaved(true)) demoLayout();
+    // load from a share link (#layout= fragment), else saved, else demo
+    if (!loadFromShareHash() && !loadSaved(true)) demoLayout();
     // P4: apply the tier gate to every gated control (palette, strategy
     // selects, preset button, tier badge). Default tier is "demo".
     applyTier();
