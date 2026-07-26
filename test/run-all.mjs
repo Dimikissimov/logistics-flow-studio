@@ -13,7 +13,10 @@
  *   3. lsp/verify.js         - LSP Planner engine: determinism, the
  *      L3 (pull beats push) and L4 (cross-dock) lessons, tier gate,
  *      reference designs pass their level budgets.
- *   4. tools/offline-guard.mjs - no external assets referenced from
+ *   4. verify_share.js       - share-link codec: base64url round-trip
+ *      on the starter + MRO layouts with identical sim KPIs, malformed
+ *      payloads rejected, measured link lengths printed.
+ *   5. tools/offline-guard.mjs - no external assets referenced from
  *      any app file (the app must stay 100% offline).
  *
  * Usage:  node test/run-all.mjs
@@ -29,6 +32,7 @@ const HARNESSES = [
   { name: "optimizer measurement (measure_optimizer.js)", args: ["measure_optimizer.js"] },
   { name: "heatmap conservation + KPI baselines (verify_heatmap.js)", args: ["verify_heatmap.js"] },
   { name: "LSP Planner engine gates (lsp/verify.js)", args: [path.join("lsp", "verify.js")] },
+  { name: "share-link codec round-trip (verify_share.js)", args: ["verify_share.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
