@@ -41,6 +41,9 @@
     resultStale: false, // true when layout/settings changed after a run
     drag: null, // {id, offsetX, offsetY, moved}
     preview: null, // optimizer proposal: [{id,type,x,y,w,d}] shown as ghosts
+    showHeat: false, // pick-traffic heatmap overlay toggle
+    history: [], // run history rows (session-only, see pushHistory)
+    historyN: 0, // monotonically increasing run number for the table
   };
 
   // ---------------- DOM refs ----------------
@@ -55,8 +58,8 @@
   function themeColors() {
     const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     return dark
-      ? { bg: "#0e1626", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171" }
-      : { bg: "#ffffff", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626" };
+      ? { bg: "#0e1626", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171", heat: "#fb923c" }
+      : { bg: "#ffffff", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626", heat: "#c2410c" };
   }
   let COLORS = themeColors();
 
@@ -152,6 +155,9 @@
       ctx.lineTo(cssW, Math.round(y * cellPx) + 0.5);
       ctx.stroke();
     }
+
+    // pick-traffic heatmap (under the elements — pickers walk the aisles)
+    if (state.showHeat) drawHeat();
 
     // elements
     for (const e of state.elements) {
@@ -266,7 +272,95 @@
     ctx.fillText("I/O", ix + 9, iy + 4);
     ctx.restore();
 
+    // heatmap legend on top of everything (only when there is data)
+    if (state.showHeat) drawHeatLegend();
+
     updateBadges(viol, chains);
+  }
+
+  /* ------------------------------------------------------------------
+   * Pick-traffic heatmap overlay. Data comes straight from the last
+   * run (simulation.js heatmap field: metres walked per 1 m cell) and
+   * describes THAT run — the legend flags it when the layout/settings
+   * have changed since. One warm hue whose alpha ramps with the square
+   * root of the cell's share of the peak: walking traffic is heavily
+   * skewed toward the I/O point, and sqrt keeps mid-traffic aisles
+   * visible without flattening the hot end.
+   * ------------------------------------------------------------------ */
+  function heatAlpha(share) {
+    return 0.08 + 0.55 * Math.sqrt(share);
+  }
+
+  function drawHeat() {
+    const res = state.lastResult;
+    if (!res || !res.ok || !res.heatmap || res.heatmap.maxM <= 0) return;
+    const hm = res.heatmap;
+    for (let y = 0; y < hm.h && y < GRID_H; y++) {
+      for (let x = 0; x < hm.w && x < GRID_W; x++) {
+        const v = hm.cells[y * hm.w + x];
+        if (v <= 0) continue;
+        ctx.fillStyle = hexA(COLORS.heat, heatAlpha(v / hm.maxM));
+        ctx.fillRect(x * cellPx, y * cellPx, cellPx, cellPx);
+      }
+    }
+  }
+
+  function drawHeatLegend() {
+    const res = state.lastResult;
+    if (!res || !res.ok || !res.heatmap || res.heatmap.maxM <= 0) return;
+    const hm = res.heatmap;
+    // Bottom-right corner: the top-left would sit on the inbound dock
+    // in the starter and MRO layouts; bottom-right is usually floor.
+    const w = 200, h = 40;
+    const x0 = GRID_W * cellPx - w - 8, y0 = GRID_H * cellPx - h - 8;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = COLORS.bg;
+    roundRect(x0, y0, w, h, 8);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = COLORS.gridStrong;
+    roundRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1, 8);
+    ctx.stroke();
+    ctx.font = "600 10px system-ui, sans-serif";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = COLORS.text;
+    const title = "Pick walking (m per cell)";
+    ctx.fillText(title, x0 + 8, y0 + 6);
+    if (state.resultStale) {
+      ctx.fillStyle = COLORS.violation;
+      ctx.fillText("· stale", x0 + 12 + ctx.measureText(title).width, y0 + 6);
+    }
+    // gradient strip: the exact alpha ramp the cells use, plus the peak
+    const gx = x0 + 8, gy = y0 + 22, gw = 110, gh = 8, steps = 24;
+    for (let i = 0; i < steps; i++) {
+      ctx.fillStyle = hexA(COLORS.heat, heatAlpha((i + 0.5) / steps));
+      ctx.fillRect(gx + (gw / steps) * i, gy, gw / steps + 0.5, gh);
+    }
+    ctx.fillStyle = COLORS.dim;
+    ctx.font = "500 9px system-ui, sans-serif";
+    ctx.fillText("0 – " + hm.maxM.toFixed(0) + " m", gx + gw + 6, gy - 1);
+    ctx.restore();
+  }
+
+  function toggleHeat() {
+    state.showHeat = !state.showHeat;
+    const b = $("heatBtn");
+    b.classList.toggle("active", state.showHeat);
+    b.setAttribute("aria-pressed", String(state.showHeat));
+    render();
+    if (!state.showHeat) {
+      status("Heatmap off.");
+      return;
+    }
+    const hasData = state.lastResult && state.lastResult.ok && state.lastResult.heatmap && state.lastResult.heatmap.maxM > 0;
+    status(
+      hasData
+        ? "Heatmap on — shading is metres walked per 1 m cell in the last run. Goods-to-person picks (AS/RS, shuttle) add no walking." +
+          (state.resultStale ? " Stale: layout/settings changed since — Run again." : "")
+        : "Heatmap on — Run the simulation to see where the pickers walk."
+    );
   }
 
   /* ------------------------------------------------------------------
@@ -812,17 +906,98 @@
   // ================================================================
   // SIMULATION
   // ================================================================
-  function runSimulation() {
+  function runSimulation(source) {
     readConfigFromUI();
     const layout = { elements: state.elements, gridW: GRID_W, gridH: GRID_H, cell: CELL_M };
     const res = WT.sim.run(layout, state.config);
     state.lastResult = res;
     renderKPIs(res);
+    render(); // refresh the heatmap overlay/legend for the new run
     if (!res.ok) {
       status("Add at least one storage element (racking or block stack) to run a meaningful sim.");
     } else {
+      pushHistory(res, typeof source === "string" ? source : "run");
       status(`Ran ${res.ordersServed} orders with ${res.strategy.toUpperCase()} slotting (seed ${res.seed}). I/O = ${res.ioSource}.`);
     }
+  }
+
+  // ================================================================
+  // RUN HISTORY (session-only experiment log)
+  // ----------------------------------------------------------------
+  // Every completed Run appends a row (config summary + headline KPIs)
+  // so iterating on strategies/layouts does not require notes on
+  // paper. Newest first; the best pick travel and best throughput so
+  // far are marked like the A/B table's winners. Deliberately NOT
+  // persisted: rows describe layouts that may no longer exist, so the
+  // log lives and dies with the browser session.
+  // ================================================================
+  const HISTORY_CAP = 50; // oldest rows drop off beyond this
+
+  function pushHistory(res, source) {
+    if (!res || !res.ok) return;
+    const wage = Math.max(0, Number(state.config.wagePerHour) || 0);
+    state.history.push({
+      n: ++state.historyN,
+      source: source,
+      strategy: (D.STRATEGIES[res.strategy] || {}).label || res.strategy,
+      flow: (res.flowMode || "pull").toUpperCase(),
+      seed: res.seed,
+      orders: res.params.orders,
+      skus: res.params.skuCount,
+      positions: res.palletPositionsTotal,
+      travel: res.avgPickTravelM,
+      thr: res.throughputOrdersPerHour,
+      fill: res.storageFillPct,
+      stockout: res.stockoutPct,
+      eur: ((res.labourSecPerOrder || 0) / 3600) * wage,
+    });
+    if (state.history.length > HISTORY_CAP) state.history.shift();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const wrap = $("histWrap");
+    const clearBtn = $("histClearBtn");
+    if (!wrap || !clearBtn) return;
+    if (!state.history.length) {
+      wrap.innerHTML = '<p class="empty">Run the simulation — every run lands here as a comparable row.</p>';
+      clearBtn.hidden = true;
+      return;
+    }
+    let bestTravel = Infinity, bestThr = -Infinity;
+    for (const r of state.history) {
+      if (r.travel < bestTravel) bestTravel = r.travel;
+      if (r.thr > bestThr) bestThr = r.thr;
+    }
+    const rows = state.history
+      .slice()
+      .reverse()
+      .map((r) => {
+        const setup =
+          `${esc(r.strategy)} · ${esc(r.flow)} · seed ${r.seed} · ${r.orders} ord / ${r.skus} SKU · ${r.positions} pos` +
+          (r.source === "optimizer" ? ' <span class="hist-tag">optimizer</span>' : "");
+        return (
+          `<tr><td class="hist-n">${r.n}</td><td class="hist-setup">${setup}</td>` +
+          `<td class="${r.travel === bestTravel ? "win" : ""}">${r.travel.toFixed(1)}</td>` +
+          `<td class="${r.thr === bestThr ? "win" : ""}">${r.thr.toFixed(1)}</td>` +
+          `<td>${r.fill.toFixed(0)}</td><td>${r.stockout.toFixed(1)}</td><td>${r.eur.toFixed(2)}</td></tr>`
+        );
+      })
+      .join("");
+    wrap.innerHTML =
+      '<table class="hist-table"><thead><tr>' +
+      "<th>#</th><th>Setup</th><th>m/ord</th><th>ord/hr</th><th>fill %</th><th>stkout %</th><th>EUR/ord</th>" +
+      "</tr></thead><tbody>" +
+      rows +
+      "</tbody></table>";
+    clearBtn.hidden = false;
+  }
+
+  function clearHistory() {
+    state.history = [];
+    state.historyN = 0;
+    renderHistory();
+    status("Run history cleared.");
   }
 
   // Staleness cue: once a run is displayed, any layout mutation or
@@ -840,6 +1015,8 @@
       kpi.prepend(note);
       kpi.classList.add("stale");
     }
+    // The heatmap legend carries its own stale marker — repaint it.
+    if (state.showHeat) render();
   }
 
   function renderKPIs(res) {
@@ -985,7 +1162,7 @@
     scheduleSave();
     render();
     renderProps();
-    runSimulation();
+    runSimulation("optimizer"); // tagged in the run-history table
     $("optOut").innerHTML = '<p class="opt-none">Applied. KPIs updated above.</p>';
     toast("Optimized layout applied.");
   }
@@ -1681,7 +1858,9 @@
     });
     attachTooltip($("presetBtn"), D.PRESETS["mro-distributor"].desc);
     $("tierBtn").addEventListener("click", toggleTier);
-    $("runBtn").addEventListener("click", runSimulation);
+    $("runBtn").addEventListener("click", () => runSimulation("run"));
+    $("heatBtn").addEventListener("click", toggleHeat);
+    $("histClearBtn").addEventListener("click", clearHistory);
     $("adviseBtn").addEventListener("click", runAdvisor);
     $("optimizeBtn").addEventListener("click", runOptimize);
     $("compareBtn").addEventListener("click", runCompare);
@@ -1741,5 +1920,8 @@
    *      step, no AAB is fabricated here).
    * P5 - LSP Planner:      a higher-level network/planning layer that
    *                       consumes exported layouts (serialize()).
+   * R2 - DONE: pick-traffic heatmap overlay (drawHeat/drawHeatLegend,
+   *      fed by the simulation's per-cell walking data) and the
+   *      session-only run-history table (pushHistory/renderHistory).
    * ================================================================== */
 })();

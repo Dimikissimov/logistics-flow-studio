@@ -462,6 +462,37 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   margin-top: 2px;
 }
 
+/* =====================================================================
+ * Round 2: heatmap toggle (canvas toolbar) + run-history table
+ * ===================================================================== */
+.btn.small { font-size: 0.72rem; padding: 3px 10px; border-radius: 999px; }
+.hist-wrap { margin-top: 10px; overflow-x: auto; }
+.hist-wrap .empty { color: var(--text-dim); font-size: 0.8rem; }
+.hist-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+.hist-table th, .hist-table td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.hist-table thead th { color: var(--text-dim); font-size: 0.64rem; font-weight: 600; }
+.hist-table th:nth-child(2) { text-align: left; }
+.hist-table td { font-family: var(--mono); }
+.hist-table td.hist-n { color: var(--text-dim); }
+.hist-table td.hist-setup {
+  font-family: var(--font);
+  text-align: left;
+  color: var(--text-dim);
+  max-width: 150px;
+  white-space: normal;
+  min-width: 110px;
+}
+.hist-table td.win { color: var(--ok); font-weight: 700; }
+.hist-tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 5px;
+  padding: 0 4px;
+}
+
 /* ---- German-standards panel ---- */
 #stdDetails { }
 .std-summary { font-size: 0.9rem; font-weight: 650; cursor: pointer; padding: 2px 0; }

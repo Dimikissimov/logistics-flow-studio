@@ -77,6 +77,7 @@
         <span id="capBadge" class="badge muted">Positions: 0</span>
         <span id="aisleBadge" class="badge ok">Aisle OK</span>
         <span id="chainBadge" class="badge muted">Flow: manual</span>
+        <button id="heatBtn" class="btn small" type="button" aria-pressed="false" title="Shade the floor by metres walked in the last run's pick tours. Goods-to-person picks (AS/RS, shuttle) add no walking, so they leave no trace.">Heatmap</button>
       </div>
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="floor" aria-label="Warehouse floor plan editor"></canvas>
@@ -142,6 +143,14 @@
         <p class="hint">Feeds the labour-cost KPI: EUR/order = simulated picker time × wage; the weekly figure scales it by your order volume. An estimate for comparing layouts — not a quote.</p>
         <button id="runBtn" class="btn primary wide" type="button">▶ Run simulation</button>
         <div id="kpi" class="kpi"><!-- filled after a run --></div>
+      </section>
+
+      <!-- Round 2: run history (session-only experiment log) -->
+      <section class="card">
+        <h2 class="card-title">Run history</h2>
+        <p class="hint">Every Run appends a row (newest first) so you can compare experiments without notes on paper. Green marks the best pick travel and throughput so far. <strong>Session-only</strong> — rows describe layouts that may have changed since, so the log is not saved with the layout. EUR/ord uses the wage set at that run. Same seed &amp; setup → identical row.</p>
+        <div id="histWrap" class="hist-wrap"><p class="empty">Run the simulation — every run lands here as a comparable row.</p></div>
+        <button id="histClearBtn" class="btn wide" type="button" hidden>Clear history</button>
       </section>
 
       <!-- P3: unit-load catalog (pallets, cartons, totes) -->
@@ -224,7 +233,7 @@
       <ol class="ob-steps">
         <li><strong>1 · Place racks &amp; docks.</strong> Click a palette item, then click the floor. Drag to move, keep a valid aisle between rack rows. Chain conveyors from storage to a pack station and the outbound dock — flow arrows show what is connected. <em>The starter layout begins with its conveyor and stations disconnected on purpose: fixing its five flow warnings is your first exercise.</em></li>
         <li><strong>2 · Pick strategies.</strong> Choose slotting/picking (Random, ABC, Zone, Batch, Wave) and push vs pull replenishment on the right — or load the MRO preset for a full layout.</li>
-        <li><strong>3 · Run the sim.</strong> Hit Run to see throughput, pick travel, storage fill, stockouts and overstock. Same seed → same result.</li>
+        <li><strong>3 · Run the sim.</strong> Hit Run to see throughput, pick travel, storage fill, stockouts and overstock. Same seed → same result. Toggle <strong>Heatmap</strong> above the floor to see where the pickers walk, and compare experiments in <strong>Run history</strong>.</li>
       </ol>
       <p class="ob-note">All data is synthetic and seeded. Icons and code are original/open. Nothing is sent anywhere — it runs fully offline.</p>
       <div class="ob-actions">
