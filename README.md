@@ -79,7 +79,7 @@ It's static — no server or build step required.
   ```
   python -m http.server 8000
   ```
-  then visit `http://localhost:8000/`. Now it precaches itself and works offline, and the **Install app** button appears when your browser offers installation.
+  then visit `http://localhost:8000/`. Now it precaches itself and works offline, and the **Install app** button lights up when your browser offers installation. (The button is always visible; opened from `file://` or in a browser without PWA install prompts, clicking it explains exactly what is missing instead of silently hiding.)
 
 ## Install on Android
 
