@@ -51,3 +51,21 @@ script and configuration as above. This is the measurement behind the advisor's
 
 *History: the Pass 2 build measured ~26% for the same comparison; the Pass 3 simulation
 physics shifted it to ~21%. Cite ~21% for the current code.*
+
+## Pick-travel heatmap — conservation invariant (Round 2)
+
+**Pinned invariant (current code): the heatmap's total walked metres equals the charged
+travel (avg pick travel × orders served) to floating-point precision, for every picking
+strategy** — random, ABC, zone, batch and wave — on the starter demo layout at the default
+configuration. The heatmap is built from the exact tour legs the travel KPI charges (sampled
+in ~0.5 m steps onto the 1 m grid), so it cannot show more or less walking than the KPI.
+It is deterministic like everything else: same seed → byte-identical cells.
+
+**Reproduce it:**
+
+```bash
+node verify_heatmap.js
+```
+
+The script also re-asserts the KPI baselines above (ABC 36.70 / random 46.71 m per order) so
+a heatmap change can never silently move the simulation numbers.

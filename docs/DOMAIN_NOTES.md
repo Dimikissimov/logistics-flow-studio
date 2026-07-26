@@ -183,6 +183,18 @@ All synthetic, all documented in `simulation.js`:
 
 **Method.** The I/O point is the centroid of the outbound docks (fallbacks: inbound docks, then floor centre). SKUs are slotted per the chosen strategy, then for each synthetic order a **nearest-neighbour picking tour** runs I/O → locations → I/O (per zone for zone picking; shared across the group for batch/wave; the return leg is dropped when the whole tour is chain-covered, see §5b). Per-line handling = 12 s base + the storage system's delta; goods-to-person lines cost their machine cycle instead of walking. KPIs: **throughput** = orders ÷ total picker time × 3600; **avg pick travel** = total tour distance ÷ orders; **storage fill %** = positions used ÷ positions available; plus the P3 inventory KPIs of §5. Randomness is split into four independent seeded sub-streams (SKUs, slotting, orders, flow noise), so the whole thing stays a pure function of *(layout, seed, config)* — identical inputs give identical KPIs, byte for byte.
 
+### 7b. Pick-travel heatmap (Round 2)
+
+The **Heatmap** toggle above the floor shades each 1 m grid cell by the metres the simulated picker(s) walked inside it during the last run. Method: every *walked* leg of every tour (the same nearest-neighbour legs the travel KPI charges) is sampled in ~0.5 m steps, and each step's share of the leg length is charged to the cell it falls in. Consequences worth knowing:
+
+- **It sums exactly.** The total of all cells equals the charged travel (avg pick travel × orders served) to floating-point precision — the overlay can never show more or less walking than the KPI. This is asserted for all five picking strategies by `node verify_heatmap.js`.
+- **Straight-line legs, not aisle-routed paths.** Tours are Euclidean (as everywhere in this sim), so shading can cross racks; it visualises *where the modelled tours run*, not a physically routed path.
+- **Goods-to-person leaves no trace.** AS/RS and shuttle lines cost machine cycles, not walking, so they contribute nothing — an all-GtP layout shows an empty heatmap on purpose.
+- **Chain-covered return legs are omitted**, matching the travel KPI (§5b).
+- **Deterministic and honest about staleness.** Same seed → identical heatmap; if the layout or settings change after a run, the legend flags the overlay as stale until the next Run.
+
+The rendering uses a single warm hue whose opacity ramps with the square root of a cell's share of the peak — walking traffic is heavily skewed toward the I/O point, and the square root keeps mid-traffic aisles visible without flattening the hot end. The legend states the peak value in metres.
+
 ---
 
 ## 8. The MRO-distributor preset (P3)
