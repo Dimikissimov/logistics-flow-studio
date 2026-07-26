@@ -264,6 +264,24 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .kpi-unit { font-size: 0.7rem; color: var(--text-dim); font-weight: 500; }
 .kpi-note { font-size: 0.7rem; color: var(--text-dim); margin-top: 6px; grid-column: 1 / -1; }
 
+/* ---------------- Stale-results cue (both apps) ----------------
+ * When the layout/design or sim settings change after a run, the old
+ * results stay visible but get an amber note and dimmed numbers until
+ * the next Run/Evaluate re-renders the panel. */
+.stale-note {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  border-radius: 9px;
+  padding: 7px 10px;
+  margin-top: 12px;
+}
+.kpi.stale > :not(.stale-note),
+.score-out.stale > :not(.stale-note) { opacity: 0.55; }
+
 /* ---------------- Overlay / onboarding ---------------- */
 .overlay {
   position: fixed;

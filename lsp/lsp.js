@@ -27,6 +27,7 @@
     laneFrom: null, // first site of a lane being drawn
     drag: null, // {id, dx, dy, moved}
     lastEval: null, // engine evaluation of the CURRENT design (or null)
+    evalStale: false, // true when the design changed after an evaluation
     snapshotA: null, // {design, eval} frozen by "Save as A"
   };
 
@@ -489,14 +490,33 @@
     }
   }
 
-  // Any design change invalidates the current evaluation (the score
-  // panel keeps showing until re-run, but the badge says it is stale).
+  // Any design change invalidates the current evaluation. The badge is
+  // owned by updateBadges() (which runs after every mutation), so we only
+  // flip the evalStale flag here — updateBadges renders it as the amber
+  // "Changed - re-evaluate". The score panel keeps its old numbers but
+  // gets a visible stale marker until the next Evaluate.
   function invalidateEval() {
     if (state.lastEval) {
       state.lastEval = null;
-      $("evalBadge").textContent = "Changed - re-evaluate";
-      $("evalBadge").className = "badge warn";
+      state.evalStale = true;
+      markScoreStale();
     }
+  }
+
+  function markScoreStale() {
+    const out = $("scoreOut");
+    if (!out || out.querySelector(".stale-note") || out.querySelector(".empty")) return;
+    const note = document.createElement("div");
+    note.className = "stale-note";
+    note.textContent = "Design changed since this evaluation — the numbers below are stale. Evaluate again to refresh.";
+    out.prepend(note);
+    out.classList.add("stale");
+  }
+
+  function clearEvalStale() {
+    state.evalStale = false;
+    const out = $("scoreOut");
+    if (out) out.classList.remove("stale");
   }
 
   function afterMutate() {
@@ -511,8 +531,13 @@
     $("levelBadge").textContent = "Level: " + state.levelId + " · " + level().name;
     $("netBadge").textContent = state.design.sites.length + " sites · " + state.design.lanes.length + " lanes";
     if (!state.lastEval) {
-      $("evalBadge").textContent = "Not evaluated";
-      $("evalBadge").className = "badge muted";
+      if (state.evalStale) {
+        $("evalBadge").textContent = "Changed - re-evaluate";
+        $("evalBadge").className = "badge warn";
+      } else {
+        $("evalBadge").textContent = "Not evaluated";
+        $("evalBadge").className = "badge muted";
+      }
     } else {
       const s = state.lastEval.score;
       $("evalBadge").textContent = "Score " + s.total + "/100" + (s.pass ? " · passed" : "");
@@ -735,6 +760,7 @@
   }
 
   function renderScore(res) {
+    clearEvalStale(); // fresh numbers — drop the stale marker
     const s = res.score, t = res.totals, lv = level();
     let stars = "";
     for (let i = 0; i < 5; i++) stars += starSVG(i < s.stars);
@@ -848,6 +874,7 @@
     state.laneFrom = null;
     state.tool = null;
     state.lastEval = null;
+    clearEvalStale(); // fresh level: the score panel is reset below
     state.snapshotA = null;
     $("abOut").innerHTML = '<p class="empty">Save a design as A first, then compare.</p>';
     $("advisorOut").innerHTML = '<p class="empty">Run an analysis to see the top ranked hints.</p>';
@@ -1155,7 +1182,8 @@
     t.className = "toast" + (kind ? " " + kind : "");
     t.hidden = false;
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+    // Reading time scales with length (2.6s floor, 7s cap).
+    toastTimer = setTimeout(() => { t.hidden = true; }, Math.max(2600, Math.min(7000, msg.length * 45)));
   }
 
   function status(msg) {
