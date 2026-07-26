@@ -6,6 +6,20 @@ WarehouseTwin is a small, honest **warehouse digital-twin simulator** you can pl
 
 This is a multi-pass build, and all five passes are shipped: **Pass 1 (the foundation)**, **Pass 2 (the decision-support layer)**, **Pass 3 (domain depth)**, **Pass 4 (Android delivery + the demo/full tier gate)** and **Pass 5 (LSP Planner — the network-level planning game at [`lsp/`](lsp/), linked from the header)**.
 
+## The engine counterpart
+
+WarehouseTwin and LSP Planner are the **interactive layer** of a two-repo pair: game-like,
+in-browser, teaching-scale what-ifs. The measured, test-gated sibling is
+**[logistics-digital-twin](https://github.com/Dimitres-Kisimov/logistics-digital-twin)** — a Python
+analysis engine with exact optimization (Hungarian-algorithm slotting, a CP-SAT optimality proof on
+its small packing instance), discrete-event simulation, and CSV import for real SKU catalogs. Its
+seeded benchmark reports container fill **2.0% → 30.2%**, pick travel **−44.2%**, and order cycle
+time **−76.2%**; the numbers here (e.g. the −48.6% optimizer measurement) are teaching-scale
+demonstrations on a starter layout, not comparable to the engine's benchmark. Reach for the engine
+when you want batch analysis and provable numbers; stay here for intuition, teaching, and quick
+what-ifs. A shared layout-JSON format between the two is **planned**, not built — today the repos
+exchange no files.
+
 ## What it is
 
 A single-page, no-build, no-framework PWA (Progressive Web App). Hand-written HTML, CSS and JavaScript. It runs fully offline and can be **installed** on a phone or desktop straight from the browser.
