@@ -27,7 +27,7 @@ A single-page, no-build, no-framework PWA (Progressive Web App). Hand-written HT
 - **Interactive floor plan** on an HTML5 canvas. Place selective racking, block-stack zones, inbound/outbound dock doors, staging, conveyor, and push/pull control stations. Click to place, drag to move, everything snaps to a 1-metre grid, overlaps are blocked, and a **minimum working-aisle rule** (informed by DIN 15185) flags rack rows that sit too close.
 - **A real-ish domain model.** EUR1–EUR6 euro pallets with their actual dimensions, carton types, and honest storage-system characteristics (footprint density, selectivity, FIFO/LIFO, a relative cost index). See `docs/DOMAIN_NOTES.md` for the numbers and their sources.
 - **A seeded, deterministic simulation.** It builds a synthetic order stream, slots SKUs into your layout using **Random** or **ABC 80/20** slotting, simulates picking over the floor you drew, and reports live KPIs: throughput (orders/hr), average pick travel (m/order), storage fill %, and pallet positions used. The same seed always gives the same result.
-- **Save / load / share.** Layouts persist in your browser and can be exported and imported as plain JSON.
+- **Save / load / share.** Layouts persist in your browser and can be exported and imported as plain JSON. **Share layout link** (W2) copies a URL that carries the *whole design inside its `#layout=…` fragment* (base64url-encoded JSON, same schema as the export): the link **is** the data — nothing is uploaded, no server is involved, and browsers never even send the fragment over the network. Opening such a link rebuilds the layout locally through the same validation as JSON import; a malformed link shows an honest error toast and the app starts normally. Measured lengths: ~1.3k chars for the starter layout, ~2.8k for the MRO preset (`verify_share.js` prints the exact numbers).
 
 ### Pass 2 — decision support (new)
 
@@ -95,7 +95,7 @@ Details and citations live in [`docs/DOMAIN_NOTES.md`](docs/DOMAIN_NOTES.md).
 It's static — no server or build step required.
 
 - **Simplest:** open `index.html` in a modern browser. Everything works, including the canvas, the simulation, and save/load.
-- **Deep-links:** append `?tour=off` to either app's URL to skip the intro tour (and, LSP Planner only, `?demo=1` to load the level's starter network) — handy for demos and screenshots.
+- **Deep-links:** append `?tour=off` to either app's URL to skip the intro tour (and, LSP Planner only, `?demo=1` to load the level's starter network) — handy for demos and screenshots. Share links use the *fragment* (`#layout=…`), so they combine freely with the query flags: `index.html?tour=off#layout=…` skips the tour *and* loads the shared design. After loading, the app clears the fragment from the address bar so a refresh keeps your subsequent edits instead of re-applying the link.
 - **As a full PWA (recommended):** service workers need `http(s)`, so serve the folder:
   ```
   python -m http.server 8000
@@ -129,6 +129,7 @@ All five passes are shipped:
 - **P4 — Android delivery + tiers. ✅ Done.** The demo/full tier gate (`tiers.js` — one capability-flag module; locked items visible with an original padlock, honestly documented as a showcase gate, not DRM) and the Bubblewrap/TWA packaging scaffold (`android/` + the rewritten `PUBLISH_ANDROID.md`). Docs and config only on the store side — the signing key, developer account and submission are the owner's, marked as such.
 - **P5 — LSP Planner. ✅ Done.** The network-level planning game at [`lsp/`](lsp/): abstract-region map editor (sites + lanes, FTL vs Parcel/LTL, push/pull per DC), a pure deterministic evaluation engine (transport/facility/holding cost with base-stock safety stock and square-root risk pooling, service vs a lead-time target, labelled CO2 estimates), five scored levels with honest calibrated thresholds, A/B compare, a principle-naming advisor, the shared demo/full tier gate, and a Node verification harness (`lsp/verify.js`) that proves determinism and the L3 (pull beats push) and L4 (cross-dock pays off) lessons. Model simplifications are documented in `docs/DOMAIN_NOTES.md` §9.
 - **Round 2 — heatmap + run history. ✅ Done.** The pick-travel heatmap overlay (per-cell walked metres from the same simulated tours, conservation-checked by `verify_heatmap.js`, method in `docs/DOMAIN_NOTES.md` §7b) and the session-only run-history table.
+- **W2 — shareable layout links. ✅ Done.** The remaining half of the "save-slots + shareable links" item (run history covered the first half): `share.js` encodes the full layout as JSON → UTF-8 → base64url into the URL's `#layout=…` fragment, decoded on boot through the same validation as JSON import. 100% offline — the link *is* the data; nothing is uploaded. Round-tripped and length-measured by `verify_share.js`.
 
 ## Licence
 
