@@ -29,6 +29,8 @@
  *   throughputOrdersPerHour, avgPickTravelM, storageFillPct,
  *   palletPositionsUsed/Total, stockoutPct, overstockUnits,
  *   avgFaceStockPct, chainAssistedLinesPct
+ * Plus a per-cell pick-walking heatmap (metres walked per 1 m grid
+ * cell, summing exactly to the charged travel) for the floor overlay.
  * ===================================================================== */
 (function () {
   "use strict";
@@ -201,9 +203,12 @@
    * Returns the full loop distance and the final return-leg distance so
    * a conveyor-assisted tour can drop the return leg (goods ride the
    * chain to pack/ship while the picker starts the next tour nearby).
+   * The optional legCb is invoked once per walked leg (from, to) —
+   * excluding the return leg, which the caller owns (it knows whether
+   * that leg is walked or dropped) via the returned `end` point.
    * ------------------------------------------------------------------ */
-  function tourDistance(start, points) {
-    if (points.length === 0) return { loop: 0, returnLeg: 0 };
+  function tourDistance(start, points, legCb) {
+    if (points.length === 0) return { loop: 0, returnLeg: 0, end: start };
     const remaining = points.slice();
     let cur = start;
     let dist = 0;
@@ -218,11 +223,12 @@
         }
       }
       dist += bestD;
+      if (legCb) legCb(cur, remaining[best]);
       cur = remaining[best];
       remaining.splice(best, 1);
     }
     const returnLeg = Math.hypot(cur.x - start.x, cur.y - start.y);
-    return { loop: dist + returnLeg, returnLeg };
+    return { loop: dist + returnLeg, returnLeg, end: cur };
   }
 
   /* ------------------------------------------------------------------
@@ -252,6 +258,32 @@
     const slots = buildSlots(layout.elements, io, cell);
     const positionsTotal = slots.length;
     const chains = D.analyzeChains(layout.elements);
+
+    // ---- Pick-walking traffic accumulation (heatmap) ---------------
+    // Every walked leg of every simulated tour is rasterised onto the
+    // floor grid: a leg is sampled in ~half-cell steps and each step's
+    // share of the leg length is charged to the cell it falls in, so a
+    // cell's value is "metres walked inside this cell" and the grand
+    // total equals the charged travel exactly. Pure arithmetic, no
+    // randomness — the heatmap is as deterministic as every other
+    // output. Goods-to-person picks (AS/RS, shuttle) add no walking,
+    // so they leave no trace here; dropped (chain-covered) return legs
+    // are not stamped, matching the travel KPI.
+    const heatW = Math.max(1, Math.round(layout.gridW || 1));
+    const heatH = Math.max(1, Math.round(layout.gridH || 1));
+    const heat = new Float64Array(heatW * heatH);
+    function stampLeg(a, b) {
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len <= 0) return;
+      const steps = Math.max(1, Math.ceil(len / (cell * 0.5)));
+      const stepLen = len / steps;
+      for (let i = 0; i < steps; i++) {
+        const t = (i + 0.5) / steps;
+        const cx = Math.min(heatW - 1, Math.max(0, Math.floor((a.x + (b.x - a.x) * t) / cell)));
+        const cy = Math.min(heatH - 1, Math.max(0, Math.floor((a.y + (b.y - a.y) * t) / cell)));
+        heat[cy * heatW + cx] += stepLen;
+      }
+    }
 
     const skus = buildSkus(rngSku, cfg.skuCount, cfg.demandSkew);
     const cum = [];
@@ -316,8 +348,10 @@
 
     function flushGroup() {
       if (groupOrders === 0) return;
-      const t = tourDistance(io, groupPoints);
-      const travel = t.loop - (groupAllCovered && groupPoints.length > 0 ? t.returnLeg : 0);
+      const t = tourDistance(io, groupPoints, stampLeg);
+      const dropReturn = groupAllCovered && groupPoints.length > 0;
+      if (!dropReturn && groupPoints.length > 0) stampLeg(t.end, io);
+      const travel = t.loop - (dropReturn ? t.returnLeg : 0);
       totalTravel += travel;
       totalSeconds += travel / PARAMS.pickerSpeedMps;
       groupPoints = [];
@@ -414,7 +448,8 @@
         let travel = 0;
         for (let z = 0; z < PARAMS.zones; z++) {
           if (!byZone[z].length) continue;
-          const t = tourDistance(zoneHomes[z], byZone[z]);
+          const t = tourDistance(zoneHomes[z], byZone[z], stampLeg);
+          if (!allCovered) stampLeg(t.end, zoneHomes[z]);
           travel += t.loop - (allCovered ? t.returnLeg : 0);
         }
         totalTravel += travel;
@@ -425,8 +460,10 @@
         groupOrders++;
         if (groupOrders >= batchSize) flushGroup();
       } else {
-        const t = tourDistance(io, points);
-        const travel = t.loop - (allCovered && points.length > 0 ? t.returnLeg : 0);
+        const t = tourDistance(io, points, stampLeg);
+        const dropReturn = allCovered && points.length > 0;
+        if (!dropReturn && points.length > 0) stampLeg(t.end, io);
+        const travel = t.loop - (dropReturn ? t.returnLeg : 0);
         totalTravel += travel;
         totalSeconds += travel / PARAMS.pickerSpeedMps;
       }
@@ -441,6 +478,14 @@
       if (sCap > 0) { faceStockAcc += sInv / sCap; faceStockSamples++; }
     }
     flushGroup(); // trailing partial batch
+
+    // Materialise the heatmap as a plain array (JSON-friendly) + peak.
+    let heatMax = 0;
+    const heatCells = new Array(heat.length);
+    for (let i = 0; i < heat.length; i++) {
+      heatCells[i] = heat[i];
+      if (heat[i] > heatMax) heatMax = heat[i];
+    }
 
     const pickers = Math.max(1, cfg.pickers);
     const wallSeconds = totalSeconds / pickers;
@@ -473,6 +518,9 @@
       avgFaceStockPct: faceStockSamples > 0 ? (faceStockAcc / faceStockSamples) * 100 : 0,
       chainAssistedLinesPct: totalLines > 0 ? (chainAssistedLines / totalLines) * 100 : 0,
       chainWarnings: chains.warnings.length,
+      // Pick-walking heatmap: metres walked per 1 m grid cell (row-major
+      // y*w+x), summing exactly to the charged travel. See stampLeg.
+      heatmap: { w: heatW, h: heatH, cellM: cell, cells: heatCells, maxM: heatMax },
       // Echo the params so the readout can stay honest about assumptions.
       params: {
         pickerSpeedMps: PARAMS.pickerSpeedMps,
