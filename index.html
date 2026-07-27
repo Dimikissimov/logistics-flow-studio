@@ -64,6 +64,10 @@
           <button id="clearBtn" class="btn danger" type="button" title="Remove all elements">Clear</button>
           <button id="demoBtn" class="btn" type="button" title="Load the starter demo layout">Demo</button>
         </div>
+        <!-- W4: IFC export bridge (full tier; the demo shows the padlock).
+             Generated locally by ifc.js - no library, no network. -->
+        <button id="ifcBtn" class="btn wide" type="button" style="margin-top:8px" title="Download this layout as an IFC4 (STEP) file — the BIM exchange format every German planning office reads. Generated locally, nothing is uploaded.">Export IFC (BIM)</button>
+        <p class="hint">A <strong>scoped IFC4 export</strong> — elements as proxy solids for coordination/viewing; not full BIM authoring. Opens in free viewers such as BIMvision, usBIM.viewer or Open&nbsp;IFC&nbsp;Viewer.</p>
         <button id="shareBtn" class="btn wide" type="button" title="Copy a link that carries this whole layout inside its #layout= URL fragment — offline, nothing is uploaded, no server involved">Share layout link</button>
         <p class="hint">The link <em>is</em> the data: the whole design travels in the URL's <strong>#layout=…</strong> fragment. Nothing is uploaded and no server is involved — opening the link rebuilds the layout locally (same validation as JSON import). Combines with <strong>?tour=off</strong>.</p>
         <button id="presetBtn" class="btn wide" type="button" style="margin-top:8px">Preset: Industrial MRO distributor</button>
@@ -303,16 +307,18 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> share -> data -> app.
+  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> share -> ifc -> data -> app.
        (advisor uses the optimizer; both use domain + sim; app reads the
         tier capability flags from tiers.js, the share-link codec from
-        share.js and the CSV import parser from data.js.) -->
+        share.js, the IFC writer from ifc.js and the CSV import parser
+        from data.js.) -->
   <script src="domain.js"></script>
   <script src="tiers.js"></script>
   <script src="simulation.js"></script>
   <script src="optimizer.js"></script>
   <script src="advisor.js"></script>
   <script src="share.js"></script>
+  <script src="ifc.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>

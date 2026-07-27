@@ -1715,6 +1715,44 @@
     toast("Exported warehousetwin-layout.json");
   }
 
+  // ---- W4: IFC export bridge (ifc.js writer) -----------------------
+  // The layout leaves as an IFC4 (STEP) coordination model: spatial
+  // tree + one IfcBuildingElementProxy solid per element. Generated
+  // 100% locally by ifc.js - no library, no network. Full-tier
+  // feature; the demo button stays visible with the padlock + hint.
+  function exportIFC() {
+    const caps = WT.tiers.caps();
+    if (!caps.ifcExportAllowed) {
+      toast(caps.lockHint("IFC (BIM) export"), "warn");
+      return;
+    }
+    let step;
+    try {
+      step = WT.ifc.generate(serialize(), {
+        name: "warehousetwin-layout",
+        projectName: "WarehouseTwin layout",
+        timestamp: new Date().toISOString(), // file metadata only; geometry is deterministic
+      });
+    } catch (err) {
+      toast("IFC export failed: " + err.message, "err");
+      return;
+    }
+    const blob = new Blob([step], { type: "application/x-step" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "warehousetwin-layout.ifc";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(
+      "Exported warehousetwin-layout.ifc (IFC4, " + state.elements.length +
+      " elements as proxy solids). Scoped coordination export - heights are stated assumptions, not full BIM authoring."
+    );
+    status("IFC export written. Open it in a free viewer (BIMvision, usBIM.viewer, Open IFC Viewer) or any BIM tool.");
+  }
+
   function importJSON(file) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -1993,6 +2031,17 @@
     btn.innerHTML = (allowed ? "" : WT.tiers.padlockSVG() + " ") + "Preset: Industrial MRO distributor";
   }
 
+  // W4: IFC export button - locked-but-visible in the demo, same
+  // pattern as the preset button (padlock + explains itself on click).
+  function updateIfcLock() {
+    const btn = $("ifcBtn");
+    if (!btn) return;
+    const allowed = WT.tiers.caps().ifcExportAllowed;
+    btn.classList.toggle("locked", !allowed);
+    btn.setAttribute("aria-disabled", allowed ? "false" : "true");
+    btn.innerHTML = (allowed ? "" : WT.tiers.padlockSVG() + " ") + "Export IFC (BIM)";
+  }
+
   function updateTierUI() {
     const caps = WT.tiers.caps();
     const badge = $("tierBadge");
@@ -2014,6 +2063,7 @@
     updateStrategyDesc();
     buildAbControls();
     updatePresetLock();
+    updateIfcLock();
     updateTierUI();
     updateW3Locks();
     // Drop an active placement tool that the new tier does not include.
@@ -2466,6 +2516,7 @@
     $("saveBtn").addEventListener("click", saveNow);
     $("loadBtn").addEventListener("click", () => loadSaved(false));
     $("exportBtn").addEventListener("click", exportJSON);
+    $("ifcBtn").addEventListener("click", exportIFC); // W4: gate checked inside
     $("shareBtn").addEventListener("click", shareLayout);
     $("importBtn").addEventListener("click", () => $("importInput").click());
     $("importInput").addEventListener("change", (e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; });
@@ -2562,5 +2613,9 @@
    * R2 - DONE: pick-traffic heatmap overlay (drawHeat/drawHeatLegend,
    *      fed by the simulation's per-cell walking data) and the
    *      session-only run-history table (pushHistory/renderHistory).
+   * W4 - DONE: IFC export bridge (ifc.js -> exportIFC/updateIfcLock):
+   *      the layout leaves as a scoped IFC4 coordination model -
+   *      spatial tree + one proxy solid per element - validated by
+   *      verify_ifc.js (structural) + ifcopenshell (gold standard).
    * ================================================================== */
 })();

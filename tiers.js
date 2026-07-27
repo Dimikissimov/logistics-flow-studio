@@ -58,6 +58,8 @@
       // W3 real-world features: locked in the demo (visible + padlock).
       dataImport: false, // "Import your data" CSV panel
       underlay: false, // floor-plan image underlay tracing
+      // W4: IFC (BIM) export bridge - full-version feature.
+      ifcExport: false,
     },
     full: {
       id: "full",
@@ -69,6 +71,7 @@
       lspLevels: null,
       dataImport: true,
       underlay: true,
+      ifcExport: true,
     },
   };
 
@@ -112,6 +115,8 @@
       // W3: real-world-usability features (CSV import + floor-plan underlay).
       dataImportAllowed: t.dataImport === true,
       underlayAllowed: t.underlay === true,
+      // W4: IFC (BIM) export bridge.
+      ifcExportAllowed: t.ifcExport === true,
       lockHint: (what) =>
         what + " is part of the full version - use “Unlock full version” in the header. " +
         "(In this showcase that is a local switch; a real deployment would verify a license or purchase here.)",
