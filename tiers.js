@@ -55,6 +55,9 @@
       advisorLimit: 2,
       // P5 LSP Planner: demo plays levels L1-L2; L3+ render locked.
       lspLevels: ["L1", "L2"],
+      // W3 real-world features: locked in the demo (visible + padlock).
+      dataImport: false, // "Import your data" CSV panel
+      underlay: false, // floor-plan image underlay tracing
     },
     full: {
       id: "full",
@@ -64,6 +67,8 @@
       presets: null,
       advisorLimit: Infinity,
       lspLevels: null,
+      dataImport: true,
+      underlay: true,
     },
   };
 
@@ -104,6 +109,9 @@
       presetAllowed: (pid) => !t.presets || t.presets.indexOf(pid) !== -1,
       // P5: LSP Planner scenario levels (lsp/lsp.js reads this).
       lspLevelAllowed: (lid) => !t.lspLevels || t.lspLevels.indexOf(lid) !== -1,
+      // W3: real-world-usability features (CSV import + floor-plan underlay).
+      dataImportAllowed: t.dataImport === true,
+      underlayAllowed: t.underlay === true,
       lockHint: (what) =>
         what + " is part of the full version - use “Unlock full version” in the header. " +
         "(In this showcase that is a local switch; a real deployment would verify a license or purchase here.)",

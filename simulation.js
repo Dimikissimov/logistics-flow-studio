@@ -235,7 +235,23 @@
    * MAIN. Pure function of (layout, config). Same inputs -> same KPIs.
    * layout : { elements:[{id,type,x,y,w,d}], gridW, gridH, cell }
    * config : { seed, strategy, orders, skuCount, linesPerOrderMax,
-   *            pickers, flowMode ("push"|"pull"), demandSkew }
+   *            pickers, flowMode ("push"|"pull"), demandSkew,
+   *            dataset? }
+   *
+   * W3 "bring your own data": config.dataset (built by data.js from the
+   * user's CSVs) swaps the SYNTHETIC catalogue/order stream for the
+   * user's REAL one:
+   *   dataset.skus   [{id, picks}] - demand weights come from the
+   *                  user's weekly_picks (no Zipf, no demandSkew).
+   *                  Pallet counts per SKU stay a seeded model value
+   *                  (the CSV does not carry them - disclosed in the UI).
+   *   dataset.orders [{id, lines:[{skuIndex, qty}]}] | null - when
+   *                  present the sim replays EXACTLY these orders (the
+   *                  orders config count is ignored); when absent the
+   *                  order stream stays synthetic, weighted by the
+   *                  user's pick frequencies (disclosed as such).
+   * Without config.dataset every code path below is byte-identical to
+   * before - the synthetic baselines (verify_heatmap.js) pin that.
    * ------------------------------------------------------------------ */
   function run(layout, config) {
     const cfg = Object.assign(
@@ -285,7 +301,24 @@
       }
     }
 
-    const skus = buildSkus(rngSku, cfg.skuCount, cfg.demandSkew);
+    // W3: the user's imported dataset (data.js) replaces the synthetic
+    // SKU catalogue; without it, this path is exactly the old one.
+    const ds = cfg.dataset && Array.isArray(cfg.dataset.skus) && cfg.dataset.skus.length ? cfg.dataset : null;
+    const userOrders = ds && Array.isArray(ds.orders) && ds.orders.length ? ds.orders : null;
+    let skus;
+    if (ds) {
+      // Real demand weights from the user's weekly picks. Pallet counts
+      // per SKU are NOT in the CSV - keep the seeded model draw so
+      // storage-fill behaviour stays comparable (disclosed in the UI).
+      skus = ds.skus.map((u) => ({
+        id: u.id,
+        weight: Math.max(0, Number(u.picks) || 0),
+        pallets: Math.max(1, Math.round(PARAMS.palletsPerSkuMean * (0.4 + 1.2 * rngSku()))),
+      }));
+      if (!skus.some((s) => s.weight > 0)) skus.forEach((s) => { s.weight = 1; }); // defensive; the parser rejects all-zero picks
+    } else {
+      skus = buildSkus(rngSku, cfg.skuCount, cfg.demandSkew);
+    }
     const cum = [];
     let acc = 0;
     for (const s of skus) {
@@ -299,7 +332,14 @@
     // ---- Pick-face inventory model (push vs pull) ------------------
     // Faces are sized to expected demand over the push cycle, so the two
     // modes differ by POLICY, not by capacity. All units are "lines".
-    const avgLines = (1 + cfg.linesPerOrderMax) / 2;
+    // With user orders the expected lines/order is measured from THEIR
+    // stream instead of the synthetic uniform assumption.
+    let avgLines = (1 + cfg.linesPerOrderMax) / 2;
+    if (userOrders) {
+      let userLineCount = 0;
+      for (const uo of userOrders) userLineCount += uo.lines.length;
+      avgLines = Math.max(1, userLineCount / userOrders.length);
+    }
     const face = {}; // skuId -> {cap, inv, rop, pendingUntil}
     const pullLead = chains.inboundConnected ? PARAMS.pullLeadOrdersChained : PARAMS.pullLeadOrders;
     for (const sku of skus) {
@@ -359,7 +399,9 @@
       groupOrders = 0;
     }
 
-    for (let o = 0; o < cfg.orders; o++) {
+    // W3: replaying the user's own orders overrides the orders count.
+    const nOrders = userOrders ? userOrders.length : cfg.orders;
+    for (let o = 0; o < nOrders; o++) {
       // --- replenishment events at order start ---
       if (cfg.flowMode === "push") {
         if (o > 0 && o % PARAMS.pushIntervalOrders === 0) {
@@ -389,16 +431,26 @@
       }
 
       // --- build the order ---
-      const lines = 1 + randInt(rngOrd, cfg.linesPerOrderMax);
+      // Synthetic: seeded line count + weighted SKU draws (unchanged).
+      // User orders: replay exactly the imported lines (qty consumes
+      // that many units of face stock; travel/handling stay per line).
+      let lineSpecs; // [{idx, qty}]
+      if (userOrders) {
+        lineSpecs = userOrders[o].lines.map((l) => ({ idx: l.skuIndex, qty: Math.max(1, Number(l.qty) || 1) }));
+      } else {
+        const lines = 1 + randInt(rngOrd, cfg.linesPerOrderMax);
+        lineSpecs = [];
+        for (let l = 0; l < lines; l++) lineSpecs.push({ idx: pickWeighted(rngOrd, cum, total), qty: 1 });
+      }
       const points = [];
       let orderHandlingSec = 0;
       let orderMachineSec = 0;
       let orderPenaltySec = 0;
       let placedLines = 0;
       let allCovered = true;
-      for (let l = 0; l < lines; l++) {
-        const idx = pickWeighted(rngOrd, cum, total);
-        const sku = skus[idx];
+      for (const spec of lineSpecs) {
+        const sku = skus[spec.idx];
+        if (!sku) continue;
         const loc = home[sku.id];
         if (!loc) continue;
         placedLines++;
@@ -410,7 +462,7 @@
             stockoutLines++;
             orderPenaltySec += PARAMS.stockoutPenaltySec; // fetch from reserve
           } else {
-            f.inv--;
+            f.inv = Math.max(0, f.inv - spec.qty);
           }
           if (cfg.flowMode === "pull" && f.inv <= f.rop && f.pendingUntil < 0) {
             f.pendingUntil = o + pullLead;
@@ -499,6 +551,10 @@
       strategy: cfg.strategy,
       flowMode: cfg.flowMode,
       ioSource: io.source,
+      // W3: honest data provenance - "user" when config.dataset came
+      // from imported CSVs, plus which order stream actually ran.
+      dataSource: ds ? "user" : "synthetic",
+      orderSource: userOrders ? "user-orders" : ds ? "synthetic-from-your-picks" : "synthetic",
       throughputOrdersPerHour: throughput,
       avgPickTravelM: avgTravel,
       storageFillPct: fillPct,
@@ -526,9 +582,12 @@
         pickerSpeedMps: PARAMS.pickerSpeedMps,
         handlingSecPerLine: PARAMS.handlingSecPerLine,
         pickers: pickers,
-        skuCount: cfg.skuCount,
-        orders: cfg.orders,
-        demandSkew: cfg.demandSkew,
+        // Effective values: with an imported dataset the SKU count is
+        // the user's catalogue and orders is what actually ran.
+        skuCount: ds ? skus.length : cfg.skuCount,
+        orders: nOrders,
+        demandSkew: ds ? null : cfg.demandSkew, // skew never applies to real picks
+        avgLinesPerOrder: userOrders ? avgLines : null,
         flowMode: cfg.flowMode,
         pullLeadOrders: cfg.flowMode === "pull" ? (chains.inboundConnected ? PARAMS.pullLeadOrdersChained : PARAMS.pullLeadOrders) : null,
       },
