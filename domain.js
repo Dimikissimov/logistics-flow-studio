@@ -136,124 +136,130 @@
    *                 in PALLET-EQUIVALENT positions.
    * Sources: general MHE/racking literature; see DOMAIN_NOTES.md. These
    * are illustrative, not quotations.
+   *
+   * heightM (IFC export, W4): ASSUMED overall height of the element in
+   * metres, used as the extrusion depth of its proxy solid in the IFC
+   * export (ifc.js). Plausible order-of-magnitude teaching values in
+   * line with each system's `levels` - NOT vendor specs, NOT measured;
+   * the export marks them as assumptions in the WT_ElementType pset.
    * ------------------------------------------------------------------ */
   const ELEMENTS = {
     "selective-racking": {
       id: "selective-racking", label: "Selective racking", category: "storage",
       w: 6, d: 1, color: "#3b82f6", resizable: true,
-      density: 2.4, levels: 3, selectivity: 1.0, rotation: "FIFO/LIFO", costIndex: 3,
+      density: 2.4, levels: 3, selectivity: 1.0, rotation: "FIFO/LIFO", costIndex: 3, heightM: 6.0,
       desc: "Single-deep adjustable pallet racking. Every pallet directly accessible (100% selective). Needs a working aisle in front. Good FIFO.",
     },
     "block-stack": {
       id: "block-stack", label: "Block-stack zone", category: "storage",
       w: 4, d: 4, color: "#8b5cf6", resizable: true,
-      density: 3.2, levels: 3, selectivity: 0.35, rotation: "LIFO", costIndex: 1,
+      density: 3.2, levels: 3, selectivity: 0.35, rotation: "LIFO", costIndex: 1, heightM: 4.5,
       handlingDeltaSec: 8,
       desc: "Floor block stacking, no racking. Highest floor density and lowest cost, but LIFO and low selectivity (honeycombing losses). +8 s/line repositioning in the sim.",
     },
     "drive-in": {
       id: "drive-in", label: "Drive-in racking", category: "storage",
       w: 4, d: 4, color: "#b45309", resizable: true,
-      density: 3.0, levels: 3, selectivity: 0.25, rotation: "LIFO", costIndex: 2,
+      density: 3.0, levels: 3, selectivity: 0.25, rotation: "LIFO", costIndex: 2, heightM: 6.0,
       handlingDeltaSec: 10,
       desc: "Deep-lane racking the truck drives into. High density, low cost per position, but LIFO and poor selectivity (~25%): reaching a specific pallet often means digging. +10 s/line in the sim. Best for few SKUs in volume.",
     },
     "double-deep": {
       id: "double-deep", label: "Double-deep racking", category: "storage",
       w: 6, d: 2, color: "#0369a1", resizable: true,
-      density: 2.9, levels: 3, selectivity: 0.5, rotation: "FIFO within pairs", costIndex: 4,
+      density: 2.9, levels: 3, selectivity: 0.5, rotation: "FIFO within pairs", costIndex: 4, heightM: 6.0,
       handlingDeltaSec: 6,
       desc: "Two pallets deep; needs a telescopic-fork reach truck. ~20% denser than selective, but only the front pallet of each pair is directly accessible (~50% selectivity). +6 s/line in the sim.",
     },
     "push-back": {
       id: "push-back", label: "Push-back racking", category: "storage",
       w: 4, d: 3, color: "#c026d3", resizable: true,
-      density: 3.0, levels: 3, selectivity: 0.4, rotation: "LIFO", costIndex: 5,
+      density: 3.0, levels: 3, selectivity: 0.4, rotation: "LIFO", costIndex: 5, heightM: 6.0,
       handlingDeltaSec: 4,
       desc: "Nested carts on inclined rails, loaded and picked from the same aisle face. Dense, fast face access - but strictly LIFO per lane. +4 s/line in the sim. Avoid for FIFO-critical (shelf-life/batch) SKUs.",
     },
     "pallet-flow": {
       id: "pallet-flow", label: "Pallet-flow racking", category: "storage",
       w: 4, d: 4, color: "#15803d", resizable: true,
-      density: 3.4, levels: 3, selectivity: 0.45, rotation: "FIFO", costIndex: 7,
+      density: 3.4, levels: 3, selectivity: 0.45, rotation: "FIFO", costIndex: 7, heightM: 6.0,
       handlingDeltaSec: -2,
       desc: "Gravity roller lanes: load the back, pick the front - true FIFO. The front pallet is always presented at the pick face (-2 s/line in the sim). High density; higher capital cost; great for high-velocity SKUs.",
     },
     "carton-flow": {
       id: "carton-flow", label: "Carton-flow pick faces", category: "storage",
       w: 3, d: 1, color: "#ea580c", resizable: true, pickFace: true,
-      density: 1.6, levels: 4, selectivity: 1.0, rotation: "FIFO", costIndex: 4,
+      density: 1.6, levels: 4, selectivity: 1.0, rotation: "FIFO", costIndex: 4, heightM: 2.5,
       handlingDeltaSec: -4,
       desc: "Inclined roller shelves presenting cartons at ergonomic pick faces, replenished from the back - FIFO at carton level. Fastest manual picking in the model (-4 s/line). Capacity in pallet-equivalents.",
     },
     "mobile-racking": {
       id: "mobile-racking", label: "Mobile (compact) racking", category: "storage",
       w: 6, d: 4, color: "#4338ca", resizable: true,
-      density: 3.8, levels: 4, selectivity: 1.0, rotation: "FIFO/LIFO", costIndex: 8,
+      density: 3.8, levels: 4, selectivity: 1.0, rotation: "FIFO/LIFO", costIndex: 8, heightM: 8.0,
       handlingDeltaSec: 15,
       desc: "Racking on powered mobile bases sharing ONE opening aisle. Near block-stack density with 100% selectivity - but you wait for the aisle to open (+15 s/line amortised in the sim). Suits slow movers / cold storage.",
     },
     "cantilever": {
       id: "cantilever", label: "Cantilever racking", category: "storage",
       w: 6, d: 2, color: "#57534e", resizable: true, longGoods: true,
-      density: 0.8, levels: 3, selectivity: 1.0, rotation: "FIFO/LIFO", costIndex: 4,
+      density: 0.8, levels: 3, selectivity: 1.0, rotation: "FIFO/LIFO", costIndex: 4, heightM: 5.0,
       handlingDeltaSec: 6,
       desc: "Arms on columns, no front uprights - for long goods (pipes, profiles, timber). Low position density in pallet-equivalents; awkward loads (+6 s/line in the sim, usually side-loaded).",
     },
     "asrs": {
       id: "asrs", label: "AS/RS crane aisle", category: "storage",
       w: 8, d: 2, color: "#dc2626", resizable: true,
-      density: 5.0, levels: 10, selectivity: 1.0, rotation: "FIFO", costIndex: 10,
+      density: 5.0, levels: 10, selectivity: 1.0, rotation: "FIFO", costIndex: 10, heightM: 20.0,
       goodsToPerson: true, cycleSec: 45,
       desc: "Automated high-bay aisle: a stacker crane serves double-sided racking. Goods-to-person: a pick line costs a ~45 s machine cycle instead of walking. Highest density (10+ levels) and highest capital cost. Informed by VDI 3564 high-bay design guidance (not certified).",
     },
     "shuttle": {
       id: "shuttle", label: "Shuttle system", category: "storage",
       w: 6, d: 3, color: "#0891b2", resizable: true,
-      density: 4.5, levels: 6, selectivity: 0.9, rotation: "FIFO/LIFO", costIndex: 9,
+      density: 4.5, levels: 6, selectivity: 0.9, rotation: "FIFO/LIFO", costIndex: 9, heightM: 12.0,
       goodsToPerson: true, cycleSec: 28,
       desc: "Deep-lane channels served by autonomous shuttle carts + lifts. Goods-to-person (~28 s cycle/line). Denser than AS/RS per channel, per-level throughput scales with shuttle count (simplified to one cycle time here).",
     },
     "mezzanine": {
       id: "mezzanine", label: "Mezzanine pick level", category: "storage",
       w: 6, d: 4, color: "#65a30d", resizable: true, pickFace: true,
-      density: 2.0, levels: 2, selectivity: 1.0, rotation: "FIFO", costIndex: 5,
+      density: 2.0, levels: 2, selectivity: 1.0, rotation: "FIFO", costIndex: 5, heightM: 5.0,
       handlingDeltaSec: 5,
       desc: "A steel platform doubling the floor for small-parts shelving above/below. Capacity in pallet-equivalents across both levels; +5 s/line in the sim for the level change (stairs/lift).",
     },
     "dock-in": {
       id: "dock-in", label: "Dock door (inbound)", category: "flow",
-      w: 2, d: 1, color: "#22c55e", resizable: false, io: "receiving",
+      w: 2, d: 1, color: "#22c55e", resizable: false, io: "receiving", heightM: 4.5,
       desc: "Inbound (receiving) dock door. Goods arrive here and enter the flow.",
     },
     "dock-out": {
       id: "dock-out", label: "Dock door (outbound)", category: "flow",
-      w: 2, d: 1, color: "#ef4444", resizable: false, io: "shipping",
+      w: 2, d: 1, color: "#ef4444", resizable: false, io: "shipping", heightM: 4.5,
       desc: "Outbound (shipping) dock door. Picked orders leave here - it is the default I/O point for pick travel.",
     },
     "staging": {
       id: "staging", label: "Staging area", category: "flow",
-      w: 4, d: 2, color: "#f59e0b", resizable: true,
+      w: 4, d: 2, color: "#f59e0b", resizable: true, heightM: 1.5,
       desc: "Marshalling / staging buffer for inbound put-away or outbound consolidation. Buffer, not long-term storage.",
     },
     "conveyor": {
       id: "conveyor", label: "Conveyor segment", category: "flow",
-      w: 6, d: 1, color: "#64748b", resizable: true,
+      w: 6, d: 1, color: "#64748b", resizable: true, heightM: 0.9,
       desc: "Powered conveyor segment for internal material flow between zones.",
     },
     "push-station": {
       id: "push-station", label: "Push station", category: "flow",
-      w: 2, d: 2, color: "#0ea5e9", flow: "push",
+      w: 2, d: 2, color: "#0ea5e9", flow: "push", heightM: 1.2,
       desc: "PUSH control point: material is released to storage on a forecast/schedule (make-to-stock replenishment). Can build buffer ahead of demand.",
     },
     "pull-station": {
       id: "pull-station", label: "Pull station", category: "flow",
-      w: 2, d: 2, color: "#14b8a6", flow: "pull",
+      w: 2, d: 2, color: "#14b8a6", flow: "pull", heightM: 1.2,
       desc: "PULL control point: material moves only when a downstream order/kanban signal asks for it (make-to-order). Lower inventory, demand-paced.",
     },
     "pack-station": {
       id: "pack-station", label: "Pack station", category: "flow",
-      w: 3, d: 2, color: "#eab308", resizable: true, stage: "pack",
+      w: 3, d: 2, color: "#eab308", resizable: true, stage: "pack", heightM: 1.1,
       desc: "Packing/consolidation bench between picking and shipping. A complete outbound chain runs storage → (conveyor) → pack → outbound dock.",
     },
   };
