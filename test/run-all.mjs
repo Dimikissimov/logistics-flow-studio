@@ -20,7 +20,11 @@
  *      paths (row-numbered messages), ABC 80/20 recompute, dataset ->
  *      sim integration, determinism on imported data, and the pinned
  *      synthetic baseline staying untouched.
- *   6. tools/offline-guard.mjs - no external assets referenced from
+ *   6. verify_ifc.js         - W4 IFC export bridge: STEP framing,
+ *      resolvable entity graph, entity counts vs the layout, GlobalId
+ *      rules, string escaping, determinism - plus the OPTIONAL
+ *      ifcopenshell gold-standard step (skips with a note if absent).
+ *   7. tools/offline-guard.mjs - no external assets referenced from
  *      any app file (the app must stay 100% offline).
  *
  * Usage:  node test/run-all.mjs
@@ -38,6 +42,7 @@ const HARNESSES = [
   { name: "LSP Planner engine gates (lsp/verify.js)", args: [path.join("lsp", "verify.js")] },
   { name: "share-link codec round-trip (verify_share.js)", args: ["verify_share.js"] },
   { name: "CSV data import + determinism (verify_data.js)", args: ["verify_data.js"] },
+  { name: "IFC export bridge (verify_ifc.js)", args: ["verify_ifc.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
