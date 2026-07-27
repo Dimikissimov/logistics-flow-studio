@@ -70,6 +70,59 @@
         <p class="hint">An <em>illustrative</em> large-distributor layout (rack rows, AS/RS aisle, conveyor spine, push/pull stations, both docks) with 80/20-skewed demand. Independent, based on public information about the industry segment — <strong>not affiliated with or endorsed by Würth</strong> or any real company.</p>
         <input id="importInput" type="file" accept="application/json,.json" hidden />
       </section>
+
+      <!-- W3: bring your own data (CSV import). Full-tier feature: the
+           demo shows it locked with the padlock + unlock hint (never
+           hidden). Parsing runs in the browser via FileReader - the
+           app makes zero network requests, so nothing CAN be uploaded. -->
+      <section class="card" id="dataCard">
+        <h2 class="card-title">Import your data <span id="dataLock"></span></h2>
+        <p class="hint">Run the sim on <strong>your own SKUs</strong>: an article CSV
+          <code>sku,description,weekly_picks[,class]</code> sets real pick velocities
+          (ABC recomputed 80/20 from your picks unless you supply the class column), and an optional
+          order CSV <code>order_id,sku,qty</code> replays your actual order stream.
+          Parsed in your browser — nothing leaves this device. Caps: 2000 articles, 20000 order lines, 2&nbsp;MB per file.</p>
+        <div class="btn-grid">
+          <button id="artCsvBtn" class="btn" type="button" title="Pick the article CSV (sku,description,weekly_picks[,class])">Article CSV…</button>
+          <button id="ordCsvBtn" class="btn" type="button" title="Optional: pick the order CSV (order_id,sku,qty)">Order CSV…</button>
+        </div>
+        <p class="hint" id="dataFiles">No files chosen.</p>
+        <button id="dataImportBtn" class="btn primary wide" type="button">Import data</button>
+        <button id="dataResetBtn" class="btn wide" type="button" hidden>Reset to demo data</button>
+        <div id="dataErrOut" class="data-errors" hidden></div>
+        <p class="hint">Share links <strong>exclude</strong> your imported data (privacy + URL size): a link
+          carries the layout &amp; settings only and opens on the synthetic demo dataset. Your data stays in
+          this browser (localStorage) until you reset it.</p>
+        <input id="artCsvInput" type="file" accept=".csv,text/csv" hidden />
+        <input id="ordCsvInput" type="file" accept=".csv,text/csv" hidden />
+      </section>
+
+      <!-- W3: floor-plan image underlay - trace a real hall. Full-tier
+           feature, locked-but-visible in the demo. The image becomes a
+           local dataURL via FileReader (offline, no canvas taint). -->
+      <section class="card" id="underlayCard">
+        <h2 class="card-title">Floor plan underlay <span id="underlayLock"></span></h2>
+        <p class="hint">From a picture to a working layout: load a photo or plan of your hall, draw it
+          <em>under</em> the grid, calibrate the scale, then place racks &amp; docks over the traced plan.
+          The image stays in this browser and is never part of a share link.</p>
+        <button id="underlayLoadBtn" class="btn primary wide" type="button">Load floor plan…</button>
+        <div class="field">
+          <label for="underlayOpacity">Underlay opacity</label>
+          <input id="underlayOpacity" type="range" min="5" max="100" value="45" />
+        </div>
+        <div class="btn-grid">
+          <button id="underlayToggleBtn" class="btn" type="button" aria-pressed="true" title="Show or hide the underlay without removing it">Hide</button>
+          <button id="underlayMoveBtn" class="btn" type="button" aria-pressed="false" title="While active, dragging the canvas moves the image instead of elements">Align</button>
+          <button id="underlayCalibBtn" class="btn" type="button" title="Click two points on the image that are a known real distance apart, then the distance below is applied">Calibrate</button>
+          <button id="underlayRemoveBtn" class="btn danger" type="button">Remove</button>
+        </div>
+        <div class="field">
+          <label for="underlayDist">Known distance between the two calibration points (m)</label>
+          <input id="underlayDist" type="number" value="10" min="0.1" step="0.1" />
+        </div>
+        <p class="hint" id="underlayHint">No floor plan loaded.</p>
+        <input id="underlayInput" type="file" accept="image/*" hidden />
+      </section>
     </aside>
 
     <!-- CENTER: canvas -->
@@ -79,6 +132,7 @@
         <span id="capBadge" class="badge muted">Positions: 0</span>
         <span id="aisleBadge" class="badge ok">Aisle OK</span>
         <span id="chainBadge" class="badge muted">Flow: manual</span>
+        <span id="dataBadge" class="badge muted" title="Which dataset the simulation runs on: the seeded synthetic demo catalogue, or your own imported CSVs (Import your data, left panel)">Data: synthetic demo</span>
         <button id="heatBtn" class="btn small" type="button" aria-pressed="false" title="Shade the floor by metres walked in the last run's pick tours. Goods-to-person picks (AS/RS, shuttle) add no walking, so they leave no trace.">Heatmap</button>
       </div>
       <div class="canvas-wrap" id="canvasWrap">
@@ -237,7 +291,7 @@
         <li><strong>2 · Pick strategies.</strong> Choose slotting/picking (Random, ABC, Zone, Batch, Wave) and push vs pull replenishment on the right — or load the MRO preset for a full layout.</li>
         <li><strong>3 · Run the sim.</strong> Hit Run to see throughput, pick travel, storage fill, stockouts and overstock. Same seed → same result. Toggle <strong>Heatmap</strong> above the floor to see where the pickers walk, and compare experiments in <strong>Run history</strong>.</li>
       </ol>
-      <p class="ob-note">All data is synthetic and seeded. Icons and code are original/open. Nothing is sent anywhere — it runs fully offline.</p>
+      <p class="ob-note">All data starts synthetic and seeded — and in the full version you can make it <strong>yours</strong>: <em>Import your data</em> (left panel) runs the sim on your own article/order CSVs, and <em>Floor plan underlay</em> lets you trace racks over a photo of your real hall. Icons and code are original/open. Nothing is sent anywhere — it runs fully offline.</p>
       <div class="ob-actions">
         <label class="ob-skip"><input type="checkbox" id="onboardDont" /> Don't show this again</label>
         <button id="onboardClose" class="btn primary" type="button">Let's go</button>
@@ -249,16 +303,17 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> share -> app.
+  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> share -> data -> app.
        (advisor uses the optimizer; both use domain + sim; app reads the
-        tier capability flags from tiers.js and the share-link codec
-        from share.js.) -->
+        tier capability flags from tiers.js, the share-link codec from
+        share.js and the CSV import parser from data.js.) -->
   <script src="domain.js"></script>
   <script src="tiers.js"></script>
   <script src="simulation.js"></script>
   <script src="optimizer.js"></script>
   <script src="advisor.js"></script>
   <script src="share.js"></script>
+  <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -39,6 +39,16 @@
     },
     lastResult: null,
     resultStale: false, // true when layout/settings changed after a run
+    // W3 "bring your own data": the imported dataset (data.js schema)
+    // or null for the seeded synthetic demo. NEVER serialized into
+    // layouts/share links - it lives in its own localStorage key.
+    dataset: null,
+    datasetMeta: null, // {fileNames, importedAt} for the honest banner
+    // W3 floor-plan underlay: image traced under the grid. The dataURL
+    // is local (FileReader) and excluded from share links.
+    underlay: { img: null, dataUrl: null, opacity: 0.45, visible: true, offMx: 0, offMy: 0, mPerPx: 0.1, persisted: false },
+    underlayMode: null, // null | "align" | "calibrate"
+    calibPts: [], // up to 2 clicked points (image-pixel coords)
     drag: null, // {id, offsetX, offsetY, moved}
     preview: null, // optimizer proposal: [{id,type,x,y,w,d}] shown as ghosts
     showHeat: false, // pick-traffic heatmap overlay toggle
@@ -138,6 +148,11 @@
     ctx.clearRect(0, 0, cssW, cssH);
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, cssW, cssH);
+
+    // W3: floor-plan underlay - drawn UNDER the grid lines and every
+    // element so racks are traced over the real plan. Local dataURL
+    // image (FileReader), so the canvas is never tainted.
+    drawUnderlay();
 
     // grid
     ctx.lineWidth = 1;
@@ -275,7 +290,66 @@
     // heatmap legend on top of everything (only when there is data)
     if (state.showHeat) drawHeatLegend();
 
+    // W3: calibration markers while the user is clicking the 2 points
+    drawCalibMarkers();
+
     updateBadges(viol, chains);
+  }
+
+  /* ------------------------------------------------------------------
+   * W3: floor-plan underlay drawing + geometry.
+   * The image is anchored at (offMx, offMy) metres from the grid origin
+   * and scaled by mPerPx (metres per image pixel). Calibration: the
+   * user clicks two points on the image that are a known real distance
+   * apart and types that distance - mPerPx follows. This beats a blind
+   * "scale slider" because a photographed plan has no known pixel
+   * scale; two dock doors or a rack row of known length calibrate it
+   * in one gesture (documented in the README).
+   * ------------------------------------------------------------------ */
+  function drawUnderlay() {
+    const u = state.underlay;
+    if (!u.img || !u.visible) return;
+    const pxPerM = cellPx / CELL_M;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.05, Math.min(1, u.opacity));
+    ctx.drawImage(
+      u.img,
+      u.offMx * pxPerM,
+      u.offMy * pxPerM,
+      u.img.naturalWidth * u.mPerPx * pxPerM,
+      u.img.naturalHeight * u.mPerPx * pxPerM
+    );
+    ctx.restore();
+  }
+
+  function drawCalibMarkers() {
+    if (state.underlayMode !== "calibrate" || !state.calibPts.length) return;
+    const u = state.underlay;
+    const pxPerM = cellPx / CELL_M;
+    ctx.save();
+    ctx.strokeStyle = COLORS.sel;
+    ctx.fillStyle = COLORS.sel;
+    ctx.lineWidth = 2;
+    const pts = state.calibPts.map((p) => ({
+      x: (u.offMx + p.ix * u.mPerPx) * pxPerM,
+      y: (u.offMy + p.iy * u.mPerPx) * pxPerM,
+    }));
+    for (const p of pts) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (pts.length === 2) {
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      ctx.lineTo(pts[1].x, pts[1].y);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /* ------------------------------------------------------------------
@@ -605,8 +679,20 @@
     return { cx, cy };
   }
 
+  let uDrag = null; // underlay align-drag: {mx0, my0, offMx0, offMy0}
+
   canvas.addEventListener("pointerdown", (e) => {
     const { cx, cy } = pointerCell(e);
+    // W3 underlay modes take the pointer before element editing.
+    if (state.underlayMode === "calibrate" && state.underlay.img) {
+      underlayCalibClick(cx * CELL_M, cy * CELL_M);
+      return;
+    }
+    if (state.underlayMode === "align" && state.underlay.img) {
+      uDrag = { mx0: cx * CELL_M, my0: cy * CELL_M, offMx0: state.underlay.offMx, offMy0: state.underlay.offMy };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     if (state.activeTool) {
       placeAt(state.activeTool, Math.floor(cx), Math.floor(cy));
       return;
@@ -622,6 +708,13 @@
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    if (uDrag) {
+      const { cx, cy } = pointerCell(e);
+      state.underlay.offMx = uDrag.offMx0 + (cx * CELL_M - uDrag.mx0);
+      state.underlay.offMy = uDrag.offMy0 + (cy * CELL_M - uDrag.my0);
+      render();
+      return;
+    }
     if (!state.drag) return;
     const { cx, cy } = pointerCell(e);
     const el = state.elements.find((x) => x.id === state.drag.id);
@@ -640,6 +733,14 @@
   });
 
   function endDrag(e) {
+    if (uDrag) {
+      uDrag = null;
+      if (e && canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+      saveUnderlay(); // persist the new alignment (session cap rules apply)
+      return;
+    }
     if (state.drag) {
       if (state.drag.moved) scheduleSave();
       if (e && canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
@@ -909,7 +1010,7 @@
   function runSimulation(source) {
     readConfigFromUI();
     const layout = { elements: state.elements, gridW: GRID_W, gridH: GRID_H, cell: CELL_M };
-    const res = WT.sim.run(layout, state.config);
+    const res = WT.sim.run(layout, simConfig());
     state.lastResult = res;
     renderKPIs(res);
     render(); // refresh the heatmap overlay/legend for the new run
@@ -939,6 +1040,7 @@
     state.history.push({
       n: ++state.historyN,
       source: source,
+      data: res.dataSource === "user" ? "user" : null, // W3 provenance tag
       strategy: (D.STRATEGIES[res.strategy] || {}).label || res.strategy,
       flow: (res.flowMode || "pull").toUpperCase(),
       seed: res.seed,
@@ -975,7 +1077,8 @@
       .map((r) => {
         const setup =
           `${esc(r.strategy)} · ${esc(r.flow)} · seed ${r.seed} · ${r.orders} ord / ${r.skus} SKU · ${r.positions} pos` +
-          (r.source === "optimizer" ? ' <span class="hist-tag">optimizer</span>' : "");
+          (r.source === "optimizer" ? ' <span class="hist-tag">optimizer</span>' : "") +
+          (r.data === "user" ? ' <span class="hist-tag">your data</span>' : "");
         return (
           `<tr><td class="hist-n">${r.n}</td><td class="hist-setup">${setup}</td>` +
           `<td class="${r.travel === bestTravel ? "win" : ""}">${r.travel.toFixed(1)}</td>` +
@@ -1041,8 +1144,17 @@
       kcard("Labour / week", Math.round(eurPerOrder * weekly).toLocaleString("en-US"), "EUR (est.)"),
     ];
     const skewTxt = res.params.demandSkew && res.params.demandSkew !== 1 ? `, demand skew ${res.params.demandSkew}` : "";
+    // W3 honest data provenance: say exactly whose data ran.
+    let lead;
+    if (res.dataSource === "user") {
+      lead = res.orderSource === "user-orders"
+        ? `YOUR data — replayed your ${res.params.orders} imported orders over your ${res.params.skuCount} SKUs (velocities from your weekly_picks)`
+        : `YOUR article data — ${res.params.skuCount} SKUs weighted by your real weekly_picks; the ${res.params.orders}-order stream is synthetic (seeded draws from your pick frequencies — import an order CSV to replay real orders)`;
+    } else {
+      lead = `Synthetic, seeded run — ${res.params.orders} orders, ${res.params.skuCount} SKUs${skewTxt}`;
+    }
     const note =
-      `<p class="kpi-note">Synthetic, seeded run — ${res.params.orders} orders, ${res.params.skuCount} SKUs${skewTxt}, ` +
+      `<p class="kpi-note">${lead}, ` +
       `${res.params.pickers} picker @ ${res.params.pickerSpeedMps} m/s, ${res.params.handlingSecPerLine}s/line base handling, ` +
       `${(res.flowMode || "pull").toUpperCase()} replenishment` +
       (res.params.pullLeadOrders ? ` (lead ${res.params.pullLeadOrders} orders)` : "") +
@@ -1073,10 +1185,19 @@
     return { elements: state.elements, gridW: GRID_W, gridH: GRID_H, cell: CELL_M };
   }
 
+  // W3: the config actually handed to the sim/advisor/optimizer/A-B.
+  // The imported dataset rides along OUTSIDE state.config so that
+  // serialize() (layout saves + share links) can never pick it up.
+  function simConfig(extra) {
+    const cfg = Object.assign({}, state.config, extra || {});
+    if (state.dataset) cfg.dataset = state.dataset;
+    return cfg;
+  }
+
   // ---- Advisor -----------------------------------------------------
   function runAdvisor() {
     readConfigFromUI();
-    const full = WT.advisor.analyze(currentLayout(), state.config);
+    const full = WT.advisor.analyze(currentLayout(), simConfig());
     const out = $("advisorOut");
     if (!full.length) {
       out.innerHTML = '<p class="empty">Place some elements, then analyze.</p>';
@@ -1124,7 +1245,7 @@
 
   function runOptimize() {
     readConfigFromUI();
-    const opt = WT.optimizer.optimize(currentLayout(), state.config);
+    const opt = WT.optimizer.optimize(currentLayout(), simConfig());
     const out = $("optOut");
     if (!opt.ok) {
       out.innerHTML = '<p class="empty">Add storage and an outbound dock, then optimize.</p>';
@@ -1190,7 +1311,7 @@
 
   function abLayout(kind) {
     if (kind === "optimized") {
-      const opt = WT.optimizer.optimize(currentLayout(), state.config);
+      const opt = WT.optimizer.optimize(currentLayout(), simConfig());
       return { elements: opt.proposedElements, gridW: GRID_W, gridH: GRID_H, cell: CELL_M };
     }
     return currentLayout();
@@ -1203,8 +1324,8 @@
 
   function runCompare() {
     readConfigFromUI();
-    const cfgA = Object.assign({}, state.config, { strategy: $("abStratA").value });
-    const cfgB = Object.assign({}, state.config, { strategy: $("abStratB").value });
+    const cfgA = simConfig({ strategy: $("abStratA").value });
+    const cfgB = simConfig({ strategy: $("abStratB").value });
     const A = WT.sim.run(abLayout($("abLayoutA").value), cfgA);
     const B = WT.sim.run(abLayout($("abLayoutB").value), cfgB);
     const nameA = abLabel($("abStratA").value, $("abLayoutA").value);
@@ -1651,15 +1772,23 @@
     // Put the fragment into the address bar (keeps ?tour=off etc.).
     try { history.replaceState(null, "", hash); } catch (_) { location.hash = hash; }
     const url = location.href.split("#")[0] + hash;
+    // W3 privacy note: imported data + the floor-plan image are NEVER
+    // encoded into the link (privacy + URL size) - say so honestly.
+    const privateBits = [];
+    if (state.dataset) privateBits.push("your imported data");
+    if (state.underlay.img) privateBits.push("the floor-plan image");
+    const privacyNote = privateBits.length
+      ? " NOTE: " + privateBits.join(" and ") + " stay(s) on this device - the link carries the layout + settings only and opens on the synthetic demo dataset."
+      : "";
     copyText(url).then((ok) => {
       toast(
-        ok
+        (ok
           ? "Link copied (" + url.length + " chars). The design lives IN the link's #layout= fragment - nothing was uploaded, no server involved."
-          : "Could not copy automatically - the link is in the address bar now, copy it from there. (The design lives in the #layout= fragment; nothing is uploaded.)",
-        ok ? undefined : "warn"
+          : "Could not copy automatically - the link is in the address bar now, copy it from there. (The design lives in the #layout= fragment; nothing is uploaded.)") + privacyNote,
+        ok && !privacyNote ? undefined : "warn"
       );
     });
-    status("Share link ready - the URL fragment holds the whole design (offline, no upload).");
+    status("Share link ready - the URL fragment holds the whole design (offline, no upload)." + privacyNote);
   }
 
   // Boot path: a #layout= fragment loads the design carried in the URL.
@@ -1886,6 +2015,7 @@
     buildAbControls();
     updatePresetLock();
     updateTierUI();
+    updateW3Locks();
     // Drop an active placement tool that the new tier does not include.
     if (state.activeTool && !WT.tiers.caps().paletteAllowed(state.activeTool)) setTool(null);
   }
@@ -1900,6 +2030,433 @@
         : "Switched to the demo tier."
     );
     status(next === "full" ? "Full version active." : "Demo tier active — locked items show a padlock.");
+  }
+
+  // ================================================================
+  // W3 FEATURE 1: BRING YOUR OWN DATA (CSV import, data.js parser)
+  // ----------------------------------------------------------------
+  // Everything runs in the browser: FileReader -> WT.data parse ->
+  // state.dataset -> simConfig() hands it to the sim/advisor/optimizer/
+  // A-B unchanged. Row-numbered errors leave the state untouched.
+  // Persisted in its OWN localStorage key; never serialized into
+  // layouts or share links (privacy + URL size - stated in the UI).
+  // ================================================================
+  const DATA_KEY = "wt.userdata.v1";
+  let pendingArtFile = null;
+  let pendingOrdFile = null;
+
+  function dataLocked() {
+    if (WT.tiers.caps().dataImportAllowed) return false;
+    toast(WT.tiers.caps().lockHint("Importing your own data"), "warn");
+    return true;
+  }
+
+  function updateDataUI() {
+    const badge = $("dataBadge");
+    const resetBtn = $("dataResetBtn");
+    const skuIn = $("skuInput");
+    const ordIn = $("ordersInput");
+    if (state.dataset) {
+      const st = state.dataset.stats;
+      badge.textContent =
+        "Data: yours — " + st.skuCount + " SKUs" +
+        (state.dataset.orders ? ", " + st.orderCount + " orders" : ", synthetic order stream");
+      badge.className = "badge ok";
+      badge.title =
+        "The simulation runs on YOUR imported data" +
+        (state.datasetMeta && state.datasetMeta.fileNames ? " (" + state.datasetMeta.fileNames + ")" : "") + ". " +
+        (state.dataset.orders
+          ? "Order stream: your " + st.orderCount + " real orders (" + st.lineCount + " lines)."
+          : "Order stream: synthetic seeded draws weighted by your real weekly picks - you did not import orders.") +
+        " ABC classes: " + (state.dataset.classSource === "csv" ? "taken from your class column." : "recomputed 80/20 from your picks.") +
+        " Nothing was uploaded - it all stays in this browser.";
+      resetBtn.hidden = false;
+      skuIn.disabled = true;
+      skuIn.title = "SKU count comes from your imported article CSV (" + st.skuCount + " SKUs). Reset to demo data to edit.";
+      ordIn.disabled = !!state.dataset.orders;
+      ordIn.title = state.dataset.orders
+        ? "Order count comes from your imported order CSV (" + st.orderCount + " orders). Reset to demo data to edit."
+        : "How many synthetic orders to draw from your pick frequencies.";
+    } else {
+      badge.textContent = "Data: synthetic demo";
+      badge.className = "badge muted";
+      badge.title = "Which dataset the simulation runs on: the seeded synthetic demo catalogue, or your own imported CSVs (Import your data, left panel)";
+      resetBtn.hidden = true;
+      skuIn.disabled = false;
+      skuIn.title = "";
+      ordIn.disabled = false;
+      ordIn.title = "";
+    }
+    updateDataFileLine();
+  }
+
+  function updateDataFileLine() {
+    const line = $("dataFiles");
+    if (pendingArtFile || pendingOrdFile) {
+      line.textContent =
+        "Chosen: " + (pendingArtFile ? pendingArtFile.name : "(no article CSV yet)") +
+        (pendingOrdFile ? " + " + pendingOrdFile.name : "") + " — press Import data.";
+    } else if (state.dataset && state.datasetMeta) {
+      line.textContent = "Imported: " + state.datasetMeta.fileNames + ".";
+    } else {
+      line.textContent = "No files chosen.";
+    }
+  }
+
+  function showDataErrors(title, errors) {
+    const out = $("dataErrOut");
+    const lines = WT.data.formatErrors(errors);
+    out.innerHTML =
+      "<strong>" + esc(title) + " — nothing was imported, the current data is unchanged:</strong>" +
+      "<ul>" + lines.map((l) => "<li>" + esc(l) + "</li>").join("") + "</ul>";
+    out.hidden = false;
+  }
+
+  function clearDataErrors() {
+    const out = $("dataErrOut");
+    out.hidden = true;
+    out.innerHTML = "";
+  }
+
+  function readFileText(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(new Error("could not read " + file.name));
+      r.readAsText(file);
+    });
+  }
+
+  function importUserData() {
+    if (dataLocked()) return;
+    clearDataErrors();
+    if (!pendingArtFile) {
+      toast("Choose an article CSV first (sku,description,weekly_picks[,class]).", "warn");
+      return;
+    }
+    const tooBig = [pendingArtFile, pendingOrdFile].filter(
+      (f) => f && f.size > WT.data.LIMITS.maxFileBytes
+    );
+    if (tooBig.length) {
+      showDataErrors(
+        "File too large",
+        tooBig.map((f) => ({ row: 0, msg: f.name + " is " + (f.size / 1048576).toFixed(1) + " MB (cap " + (WT.data.LIMITS.maxFileBytes / 1048576) + " MB per file)" }))
+      );
+      return;
+    }
+    const artP = readFileText(pendingArtFile);
+    const ordP = pendingOrdFile ? readFileText(pendingOrdFile) : Promise.resolve(null);
+    Promise.all([artP, ordP])
+      .then(([artText, ordText]) => {
+        const art = WT.data.parseArticles(artText);
+        if (!art.ok) { showDataErrors("Article CSV (" + pendingArtFile.name + ")", art.errors); return; }
+        let orders = null;
+        if (ordText !== null) {
+          const ord = WT.data.parseOrders(ordText, art.articles);
+          if (!ord.ok) { showDataErrors("Order CSV (" + pendingOrdFile.name + ")", ord.errors); return; }
+          orders = ord.orders;
+        }
+        const ds = WT.data.buildDataset(art.articles, orders);
+        const names = pendingArtFile.name + (pendingOrdFile ? " + " + pendingOrdFile.name : "");
+        state.dataset = ds;
+        state.datasetMeta = { fileNames: names, importedAt: new Date().toISOString() };
+        pendingArtFile = null;
+        pendingOrdFile = null;
+        saveDataset();
+        updateDataUI();
+        markKPIsStale();
+        const clsTxt = ds.classSource === "csv" ? "classes from your class column" : "ABC classes recomputed 80/20 from your picks";
+        toast("Imported " + names + " — " + ds.stats.skuCount + " SKUs" +
+          (ds.orders ? ", " + ds.stats.orderCount + " orders" : "") + ". Nothing left this device.");
+        status(
+          "Your data is active: " + ds.stats.skuCount + " SKUs (" + clsTxt + "), " +
+          (ds.orders
+            ? "sim replays your " + ds.stats.orderCount + " orders"
+            : "order stream stays synthetic, weighted by your real pick frequencies") +
+          ". Run the simulation."
+        );
+      })
+      .catch((err) => toast("Import failed: " + err.message, "err"));
+  }
+
+  function resetDataset() {
+    if (!state.dataset) return;
+    state.dataset = null;
+    state.datasetMeta = null;
+    pendingArtFile = null;
+    pendingOrdFile = null;
+    try { localStorage.removeItem(DATA_KEY); } catch (_) {}
+    clearDataErrors();
+    updateDataUI();
+    markKPIsStale();
+    toast("Back to the seeded synthetic demo dataset.");
+    status("Reset to demo data — the sim runs on the synthetic catalogue again.");
+  }
+
+  function saveDataset() {
+    try {
+      localStorage.setItem(DATA_KEY, JSON.stringify({ dataset: state.dataset, meta: state.datasetMeta }));
+    } catch (_) {
+      toast("Could not persist your data (storage full/blocked) — it stays for this session only.", "warn");
+    }
+  }
+
+  function loadDataset() {
+    try {
+      const raw = localStorage.getItem(DATA_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (obj && obj.dataset && Array.isArray(obj.dataset.skus) && obj.dataset.skus.length) {
+        state.dataset = obj.dataset;
+        state.datasetMeta = obj.meta || null;
+      }
+    } catch (_) { /* unreadable -> stay synthetic */ }
+  }
+
+  function wireDataPanel() {
+    $("artCsvBtn").addEventListener("click", () => { if (!dataLocked()) $("artCsvInput").click(); });
+    $("ordCsvBtn").addEventListener("click", () => { if (!dataLocked()) $("ordCsvInput").click(); });
+    $("artCsvInput").addEventListener("change", (e) => {
+      if (e.target.files[0]) { pendingArtFile = e.target.files[0]; clearDataErrors(); updateDataFileLine(); }
+      e.target.value = "";
+    });
+    $("ordCsvInput").addEventListener("change", (e) => {
+      if (e.target.files[0]) { pendingOrdFile = e.target.files[0]; clearDataErrors(); updateDataFileLine(); }
+      e.target.value = "";
+    });
+    $("dataImportBtn").addEventListener("click", importUserData);
+    $("dataResetBtn").addEventListener("click", resetDataset);
+  }
+
+  // ================================================================
+  // W3 FEATURE 2: FLOOR-PLAN IMAGE UNDERLAY (trace the real hall)
+  // ----------------------------------------------------------------
+  // FileReader -> dataURL -> Image drawn UNDER the grid (drawUnderlay).
+  // Two-point calibration sets metres-per-pixel; Align mode drags the
+  // image; opacity slider + hide toggle. Persisted in its own
+  // localStorage key up to a size cap (bigger images stay session-only
+  // with a warning). Never part of a share link.
+  // ================================================================
+  const UL_KEY = "wt.underlay.v1";
+  const UL_FILE_MAX_BYTES = 4 * 1024 * 1024; // refuse files above 4 MB
+  const UL_PERSIST_MAX_CHARS = 2500000; // ~1.9 MB binary as dataURL - localStorage cap
+
+  function underlayLocked() {
+    if (WT.tiers.caps().underlayAllowed) return false;
+    toast(WT.tiers.caps().lockHint("The floor-plan underlay"), "warn");
+    return true;
+  }
+
+  function setUnderlayImage(dataUrl, fileName) {
+    const img = new Image();
+    img.onload = () => {
+      const u = state.underlay;
+      u.img = img;
+      u.dataUrl = dataUrl;
+      u.visible = true;
+      u.offMx = 0;
+      u.offMy = 0;
+      // Default scale: fit the image across the full floor width.
+      u.mPerPx = (GRID_W * CELL_M) / Math.max(1, img.naturalWidth);
+      state.underlayMode = null;
+      state.calibPts = [];
+      saveUnderlay();
+      updateUnderlayUI();
+      render();
+      toast("Floor plan loaded" + (fileName ? " (" + fileName + ")" : "") + " — stays on this device. Calibrate the scale, then trace your racks over it.");
+      status("Underlay: use Calibrate (click two points a known distance apart), Align to drag it, and the opacity slider. Then place elements over the plan as usual.");
+    };
+    img.onerror = () => toast("That file could not be decoded as an image.", "err");
+    img.src = dataUrl;
+  }
+
+  function loadUnderlayFile(file) {
+    if (file.size > UL_FILE_MAX_BYTES) {
+      toast("Image too large: " + (file.size / 1048576).toFixed(1) + " MB (cap " + (UL_FILE_MAX_BYTES / 1048576) + " MB). Downscale/compress the plan first.", "err");
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => setUnderlayImage(String(r.result), file.name);
+    r.onerror = () => toast("Could not read the image file.", "err");
+    r.readAsDataURL(file);
+  }
+
+  function underlayCalibClick(mx, my) {
+    const u = state.underlay;
+    state.calibPts.push({ ix: (mx - u.offMx) / u.mPerPx, iy: (my - u.offMy) / u.mPerPx });
+    if (state.calibPts.length < 2) {
+      render();
+      status("Calibrate: first point set — now click the second point (a known real distance from the first).");
+      return;
+    }
+    const [p1, p2] = state.calibPts;
+    const pxDist = Math.hypot(p2.ix - p1.ix, p2.iy - p1.iy);
+    const metres = Number($("underlayDist").value);
+    if (!(pxDist > 2)) {
+      state.calibPts = [];
+      render();
+      toast("Calibration points are on top of each other — click two points further apart.", "warn");
+      return;
+    }
+    if (!(metres > 0)) {
+      state.calibPts = [];
+      render();
+      toast("Enter the real distance (m) between the two points first, then calibrate again.", "warn");
+      return;
+    }
+    // Keep the FIRST clicked point fixed on the floor while rescaling
+    // so the image does not jump away under the user's pointer.
+    const anchorMx = u.offMx + p1.ix * u.mPerPx;
+    const anchorMy = u.offMy + p1.iy * u.mPerPx;
+    u.mPerPx = metres / pxDist;
+    u.offMx = anchorMx - p1.ix * u.mPerPx;
+    u.offMy = anchorMy - p1.iy * u.mPerPx;
+    state.calibPts = [];
+    state.underlayMode = null;
+    saveUnderlay();
+    updateUnderlayUI();
+    render();
+    const wM = (u.img.naturalWidth * u.mPerPx).toFixed(1);
+    const hM = (u.img.naturalHeight * u.mPerPx).toFixed(1);
+    toast("Scale calibrated: the plan now measures " + wM + " × " + hM + " m on the 1 m grid.");
+    status("Underlay calibrated (" + (1 / u.mPerPx).toFixed(1) + " px/m). Use Align to fine-position it, then trace your racks.");
+  }
+
+  function setUnderlayMode(mode) {
+    if (state.underlayMode === mode) mode = null; // toggle off
+    state.underlayMode = mode;
+    state.calibPts = [];
+    if (mode) setTool(null); // placement and underlay modes are exclusive
+    updateUnderlayUI();
+    render();
+    if (mode === "align") status("Align: drag the canvas to move the floor plan under the grid. Click Align again to finish.");
+    else if (mode === "calibrate") status("Calibrate: click TWO points on the image that are a known real distance apart (set the distance in the panel).");
+  }
+
+  function removeUnderlay() {
+    const u = state.underlay;
+    u.img = null;
+    u.dataUrl = null;
+    u.persisted = false;
+    state.underlayMode = null;
+    state.calibPts = [];
+    try { localStorage.removeItem(UL_KEY); } catch (_) {}
+    updateUnderlayUI();
+    render();
+    status("Floor plan removed.");
+  }
+
+  function updateUnderlayUI() {
+    const u = state.underlay;
+    const hint = $("underlayHint");
+    const tog = $("underlayToggleBtn");
+    tog.textContent = u.visible ? "Hide" : "Show";
+    tog.setAttribute("aria-pressed", String(u.visible));
+    $("underlayMoveBtn").classList.toggle("active", state.underlayMode === "align");
+    $("underlayMoveBtn").setAttribute("aria-pressed", String(state.underlayMode === "align"));
+    $("underlayCalibBtn").classList.toggle("active", state.underlayMode === "calibrate");
+    $("underlayOpacity").value = String(Math.round(u.opacity * 100));
+    if (!u.img) {
+      hint.textContent = "No floor plan loaded.";
+      return;
+    }
+    const wM = (u.img.naturalWidth * u.mPerPx).toFixed(1);
+    const hM = (u.img.naturalHeight * u.mPerPx).toFixed(1);
+    hint.textContent =
+      "Plan: " + u.img.naturalWidth + "×" + u.img.naturalHeight + " px → " + wM + " × " + hM + " m at the current scale. " +
+      (u.persisted
+        ? "Kept in this browser (not in share links)."
+        : "Too large to keep in browser storage — it lives for THIS session only (reloading loses it).");
+  }
+
+  function saveUnderlay() {
+    const u = state.underlay;
+    if (!u.dataUrl) { u.persisted = false; return; }
+    if (u.dataUrl.length > UL_PERSIST_MAX_CHARS) {
+      if (u.persisted !== false || !u._warned) {
+        toast("The plan image is bigger than the storage cap (~1.9 MB) — it will NOT survive a reload. Downscale it to keep it.", "warn");
+        u._warned = true;
+      }
+      u.persisted = false;
+      try { localStorage.removeItem(UL_KEY); } catch (_) {}
+      return;
+    }
+    try {
+      localStorage.setItem(UL_KEY, JSON.stringify({
+        dataUrl: u.dataUrl, opacity: u.opacity, visible: u.visible,
+        offMx: u.offMx, offMy: u.offMy, mPerPx: u.mPerPx,
+      }));
+      u.persisted = true;
+    } catch (_) {
+      u.persisted = false;
+      toast("Could not persist the plan image (storage full) — it stays for this session only.", "warn");
+    }
+  }
+
+  function loadUnderlay() {
+    try {
+      const raw = localStorage.getItem(UL_KEY);
+      if (!raw) return;
+      const obj = JSON.parse(raw);
+      if (!obj || typeof obj.dataUrl !== "string" || obj.dataUrl.indexOf("data:image/") !== 0) return;
+      const u = state.underlay;
+      u.opacity = Math.max(0.05, Math.min(1, Number(obj.opacity) || 0.45));
+      u.visible = obj.visible !== false;
+      u.offMx = Number(obj.offMx) || 0;
+      u.offMy = Number(obj.offMy) || 0;
+      const img = new Image();
+      img.onload = () => {
+        u.img = img;
+        u.dataUrl = obj.dataUrl;
+        u.mPerPx = Number(obj.mPerPx) > 0 ? Number(obj.mPerPx) : (GRID_W * CELL_M) / Math.max(1, img.naturalWidth);
+        u.persisted = true;
+        updateUnderlayUI();
+        render();
+      };
+      img.src = obj.dataUrl;
+    } catch (_) { /* unreadable -> no underlay */ }
+  }
+
+  function wireUnderlayPanel() {
+    $("underlayLoadBtn").addEventListener("click", () => { if (!underlayLocked()) $("underlayInput").click(); });
+    $("underlayInput").addEventListener("change", (e) => {
+      if (e.target.files[0]) loadUnderlayFile(e.target.files[0]);
+      e.target.value = "";
+    });
+    $("underlayOpacity").addEventListener("input", () => {
+      state.underlay.opacity = Math.max(0.05, Math.min(1, Number($("underlayOpacity").value) / 100));
+      render();
+    });
+    $("underlayOpacity").addEventListener("change", saveUnderlay);
+    $("underlayToggleBtn").addEventListener("click", () => {
+      if (!state.underlay.img) { toast("Load a floor plan first.", "warn"); return; }
+      state.underlay.visible = !state.underlay.visible;
+      saveUnderlay();
+      updateUnderlayUI();
+      render();
+    });
+    $("underlayMoveBtn").addEventListener("click", () => {
+      if (underlayLocked()) return;
+      if (!state.underlay.img) { toast("Load a floor plan first.", "warn"); return; }
+      setUnderlayMode("align");
+    });
+    $("underlayCalibBtn").addEventListener("click", () => {
+      if (underlayLocked()) return;
+      if (!state.underlay.img) { toast("Load a floor plan first.", "warn"); return; }
+      setUnderlayMode("calibrate");
+    });
+    $("underlayRemoveBtn").addEventListener("click", removeUnderlay);
+  }
+
+  // Tier lock badges on the two W3 cards (locked = visible + padlock).
+  function updateW3Locks() {
+    const caps = WT.tiers.caps();
+    const dl = $("dataLock");
+    const ul = $("underlayLock");
+    if (dl) dl.innerHTML = caps.dataImportAllowed ? "" : WT.tiers.padlockSVG();
+    if (ul) ul.innerHTML = caps.underlayAllowed ? "" : WT.tiers.padlockSVG();
+    $("dataCard").classList.toggle("gated", !caps.dataImportAllowed);
+    $("underlayCard").classList.toggle("gated", !caps.underlayAllowed);
   }
 
   // ================================================================
@@ -1950,6 +2507,12 @@
     buildAbControls();
     buildStandards();
     wireButtons();
+    wireDataPanel();
+    wireUnderlayPanel();
+    loadDataset(); // W3: restore imported data + floor plan (their own keys)
+    loadUnderlay();
+    updateDataUI();
+    updateUnderlayUI();
     pushConfigToUI();
     resizeCanvas();
     // load from a share link (#layout= fragment), else saved, else demo
