@@ -24,7 +24,12 @@
  *      resolvable entity graph, entity counts vs the layout, GlobalId
  *      rules, string escaping, determinism - plus the OPTIONAL
  *      ifcopenshell gold-standard step (skips with a note if absent).
- *   7. tools/offline-guard.mjs - no external assets referenced from
+ *   7. verify_compliance.js  - Compliance Check: hand-built layouts
+ *      assert exact pass/warn/fail outcomes for the aisle-width,
+ *      traffic-route, escape-route and blocked-route rules (measured +
+ *      informed-by numbers), determinism, and the not-a-certification
+ *      disclaimer being present in the report output.
+ *   8. tools/offline-guard.mjs - no external assets referenced from
  *      any app file (the app must stay 100% offline).
  *
  * Usage:  node test/run-all.mjs
@@ -43,6 +48,7 @@ const HARNESSES = [
   { name: "share-link codec round-trip (verify_share.js)", args: ["verify_share.js"] },
   { name: "CSV data import + determinism (verify_data.js)", args: ["verify_data.js"] },
   { name: "IFC export bridge (verify_ifc.js)", args: ["verify_ifc.js"] },
+  { name: "Compliance Check findings (verify_compliance.js)", args: ["verify_compliance.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

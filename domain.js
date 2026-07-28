@@ -331,6 +331,38 @@
   };
 
   /* ------------------------------------------------------------------
+   * WORKPLACE-GUIDELINE GUIDANCE VALUES (shared by the Compliance Check).
+   * These are PUBLISHED guidance figures used to keep a layout sensible.
+   * They are "informed by" the named guidelines - they are NOT legally
+   * binding limits, and meeting them is NOT a certification, a
+   * legal-compliance guarantee, or a Gefaehrdungsbeurteilung (risk
+   * assessment). Every value below carries an explicit ASSUMPTION so the
+   * derivation is transparent. See compliance.js and docs/DOMAIN_NOTES.md.
+   * ------------------------------------------------------------------ */
+  const COMPLIANCE = {
+    // ASR A1.8 (Verkehrswege / traffic routes). For a one-directional
+    // MAIN traffic route used by an industrial truck, ASR A1.8's approach
+    // is: clear width >= transport-means width + a 0.5 m lateral safety
+    // clearance on EACH side. WarehouseTwin ASSUMES a 1.5 m transport
+    // envelope (a counterbalance truck carrying a load): 1.5 + 2*0.5 =
+    // 2.5 m. Published guidance value, not a binding limit.
+    mainRouteMinMetres: 2.5,
+    mainRouteNote:
+      "Informed by ASR A1.8: transport-means envelope (assumed 1.5 m) + 2 x 0.5 m lateral safety clearances = 2.5 m one-directional main route.",
+    // ASR A2.3 (Fluchtwege / escape routes). Minimum clear escape-route
+    // width scales with the number of persons using it (ASR A2.3 table:
+    // up to 5 -> 0.875 m; up to 20 -> 1.00 m; up to 200 -> 1.20 m;
+    // up to 300 -> 1.80 m; up to 400 -> 2.40 m). WarehouseTwin ASSUMES a
+    // warehouse band of up to ~200 persons and uses 1.20 m. ASR A2.3 also
+    // advises the travel distance to an exit stay within ~35 m. Published
+    // guidance values, not binding limits.
+    escapeWidthMinMetres: 1.2,
+    escapeMaxTravelMetres: 35,
+    escapeNote:
+      "Informed by ASR A2.3: clear escape-route width for up to ~200 persons (1.20 m) and a ~35 m maximum travel distance to an exit.",
+  };
+
+  /* ------------------------------------------------------------------
    * Helpers.
    * ------------------------------------------------------------------ */
   function elementCapacity(el) {
@@ -352,8 +384,12 @@
    * facing gap is > 0 but < the minimum working aisle. `gap == 0`
    * (racks back-to-back) is fine; overlap is handled elsewhere.
    * ------------------------------------------------------------------ */
-  function aisleViolations(elements, minAisleMetres) {
-    const min = minAisleMetres;
+  function facingAislePairs(elements) {
+    // Every facing storage-row pair that forms a working aisle (gap > 0),
+    // with the gap in metres and the axis the aisle runs along. `axis`
+    // "y" = rows stacked vertically, the aisle runs horizontally; "x" =
+    // rows side by side, the aisle runs vertically. Back-to-back racks
+    // (gap 0) and overlapping racks are not aisles and are excluded.
     const st = (elements || []).filter((e) => (ELEMENTS[e.type] || {}).category === "storage");
     const out = [];
     for (let i = 0; i < st.length; i++) {
@@ -364,14 +400,24 @@
         if (oX && oY) continue; // overlap, not an aisle
         if (oX && !oY) {
           const gap = Math.max(a.y, b.y) - Math.min(a.y + a.d, b.y + b.d);
-          if (gap > 0 && gap * METRES_PER_CELL < min - 1e-6) out.push({ a, b, gapM: gap * METRES_PER_CELL });
+          if (gap > 0) out.push({ a, b, gapM: gap * METRES_PER_CELL, axis: "y" });
         } else if (oY && !oX) {
           const gap = Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w);
-          if (gap > 0 && gap * METRES_PER_CELL < min - 1e-6) out.push({ a, b, gapM: gap * METRES_PER_CELL });
+          if (gap > 0) out.push({ a, b, gapM: gap * METRES_PER_CELL, axis: "x" });
         }
       }
     }
     return out;
+  }
+
+  // The single definition of "too narrow": a facing rack-row pair whose
+  // working gap is below the minimum aisle. Derived from facingAislePairs
+  // so the canvas editor, advisor, optimizer and compliance check all
+  // agree. Output shape ({a, b, gapM}) is unchanged for its callers.
+  function aisleViolations(elements, minAisleMetres) {
+    return facingAislePairs(elements)
+      .filter((p) => p.gapM < minAisleMetres - 1e-6)
+      .map((p) => ({ a: p.a, b: p.b, gapM: p.gapM }));
   }
 
   /* ------------------------------------------------------------------
@@ -574,11 +620,13 @@
     ELEMENTS,
     STRATEGIES,
     AISLE,
+    COMPLIANCE,
     PRESETS,
     elementCapacity,
     palletById,
     cartonsPerPallet,
     aisleViolations,
+    facingAislePairs,
     analyzeChains,
     isConnector,
     // Palette order shown in the UI (storage first, then flow).
