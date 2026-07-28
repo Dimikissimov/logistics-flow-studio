@@ -98,6 +98,21 @@ Scope, honestly: **a scoped IFC4 export — elements as proxy solids for coordin
 
 Validation is two-layered: `node verify_ifc.js` (harness 6 of 7 in `node test/run-all.mjs`) checks the files **structurally** — STEP framing, every `#ref` resolving, entity counts matching the layout one-to-one, GlobalId rules, string escaping, byte-identical determinism — and then, as the **gold standard**, opens both exports with [ifcopenshell](https://ifcopenshell.org/) via `tools/validate_ifc.py`, asserting schema and entity counts (this step **skips with a printed note** on machines without Python/ifcopenshell; the structural checks always run). Viewer-testing is left as a user step — free options: **BIMvision**, **usBIM.viewer**, **Open IFC Viewer**.
 
+## Compliance Check
+
+A **Compliance Check** panel (right column) reviews the current layout against **published German workplace-guideline values** and returns a structured pass / warn / fail report. It is the practical answer to a gap I kept finding: layout planners optimise for throughput and density, while workplace-safety rules live in a separate document — so the check brings a first, honest read of those rules *into* the planning canvas.
+
+What it looks at, each **informed by** a named guideline (with the guideline's published guidance value, **not** a binding limit):
+
+- **Working aisle width** — *informed by* **DIN 15185** — every facing rack-row gap against the minimum working aisle for the selected truck class (VNA / reach / counterbalance). Reuses the *same* aisle definition as the canvas, advisor and optimiser (`domain.js` `facingAislePairs` / `aisleViolations`), so there is one definition of "too narrow".
+- **Main traffic route** — *informed by* **ASR A1.8** — the clear run of the main route in front of each dock door (transport-means envelope + lateral safety clearances). A dock feeding directly into staging or a conveyor is the *designed* material flow, so connectors are treated as passable, not as an obstruction.
+- **Escape route** — *informed by* **ASR A2.3** — reachability (does every storage element have a free-floor path to an exit, or is it boxed in?), route width at the tightest passage, and travel distance to the nearest exit.
+- **Blocked route** — a dock door sealed shut by a rack so nothing can pass through it.
+
+Each finding carries the **measured value**, the **informed-by guidance value**, the **offending element id(s)** and a plain-language **DE + EN** explanation; click a finding to highlight those elements on the floor. The report is **deterministic and pure** (`compliance.js` — same layout in, byte-identical report out) and runs fully offline.
+
+Framed honestly, and non-negotiably: this is **a design aid, aligned to / informed by German workplace guidelines — explicitly NOT a certification, a legal-compliance guarantee, or a Gefährdungsbeurteilung (risk assessment).** The banner sits at the top of the panel and the same disclaimer (DE + EN) is embedded in every report, so a screenshot or logged report can never be mistaken for a certificate. The escape/traffic/blocked checks are geometric **heuristics** over a 1-metre occupancy grid (docks = exits, other elements = walls); they approximate egress logic, not a fire-safety or building-code assessment. Validated by `node verify_compliance.js` (harness 7 of 8 in `node test/run-all.mjs`): hand-built layouts assert the exact pass/warn/fail outcomes and measured/informed-by numbers, determinism, and that the not-a-certification disclaimer is present in the output.
+
 ## Design philosophy
 
 I wanted the opposite of a dense enterprise tool: something a newcomer can understand in under a minute. So the whole app is one screen — palette on the left, floor in the middle, properties and the simulation on the right — with a three-step onboarding card and tooltips on every palette item. The goal is **radically intuitive and game-like**: you learn the domain by playing with it, not by reading a manual.
@@ -139,7 +154,7 @@ It's static — no server or build step required.
 
 - **All data is synthetic and seeded.** There is no real inventory, no real order history, no telemetry. Nothing leaves your device — there are zero runtime network calls.
 - **All assets are original or open.** Icons are SVG I drew (and rasterised with a small Python/Pillow script); the font is your system font stack; there are no third-party logos, images, or trademarks. See [`CREDITS.md`](CREDITS.md).
-- **"Informed by / aligned to", not certified.** The aisle rule is *informed by* DIN 15185 and the pallet sizes follow EPAL/UIC references, but WarehouseTwin performs **no compliance certification** of any kind. The advisor / standards / German-compliance features (shipped in Pass 2) are design aids, not certification tools.
+- **"Informed by / aligned to", not certified.** The aisle rule is *informed by* DIN 15185 and the pallet sizes follow EPAL/UIC references, but WarehouseTwin performs **no compliance certification** of any kind. The advisor, standards panel and the **Compliance Check** (ASR A1.8 / ASR A2.3 / DIN 15185) are design aids — explicitly **not** a certification, a legal-compliance guarantee, or a Gefährdungsbeurteilung. The guideline figures shown are published guidance values, not legally binding limits, and a passing check does not mean a layout is compliant.
 - **No superlatives.** It's a teaching twin, not a WMS. I make no "best/patented/superhuman" claims, and the shipped UI doesn't name or knock any specific commercial product.
 
 ## Roadmap
@@ -154,6 +169,8 @@ All five passes are shipped:
 - **Round 2 — heatmap + run history. ✅ Done.** The pick-travel heatmap overlay (per-cell walked metres from the same simulated tours, conservation-checked by `verify_heatmap.js`, method in `docs/DOMAIN_NOTES.md` §7b) and the session-only run-history table.
 - **W2 — shareable layout links. ✅ Done.** The remaining half of the "save-slots + shareable links" item (run history covered the first half): `share.js` encodes the full layout as JSON → UTF-8 → base64url into the URL's `#layout=…` fragment, decoded on boot through the same validation as JSON import. 100% offline — the link *is* the data; nothing is uploaded. Round-tripped and length-measured by `verify_share.js`.
 - **W3 — real-world usability: your data + your floor plan. ✅ Done.** The CSV importer (`data.js` + the "Import your data" panel; row-numbered validation, honest synthetic-vs-yours labelling, sim/advisor/optimizer/A-B all running on the imported dataset, verified by `verify_data.js`) and the floor-plan image underlay with two-point scale calibration, align/opacity/hide controls and a localStorage size cap. Both full-tier, both offline, both excluded from share links — see "Use your own warehouse" above.
+- **W4 — Export to BIM (IFC). ✅ Done.** The dependency-free IFC4 (STEP) export bridge — `ifc.js` plus the "Export IFC (BIM)" button — validated structurally by `verify_ifc.js` and, as a gold standard, by ifcopenshell. See "Export to BIM (IFC)" above.
+- **W5 — Compliance Check. ✅ Done.** A workplace-guideline-aware layout review: `compliance.js` returns a deterministic, structured pass/warn/fail report (working aisles *informed by* DIN 15185, main traffic routes ASR A1.8, escape-route reachability/width ASR A2.3, blocked-route detection), each finding carrying measured + informed-by numbers, offending element ids and a DE/EN explanation. Wired to the "Compliance Check" panel with click-to-highlight and a prominent not-a-certification banner; verified by `verify_compliance.js`. Explicitly a design aid, **not** a certification or Gefährdungsbeurteilung. See "Compliance Check" above.
 
 ## Licence
 

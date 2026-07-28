@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v12"; // W4: IFC export bridge (index/app/tiers changed, ifc.js added)
+const CACHE_VERSION = "wt-v13"; // Compliance Check (compliance.js added; index/app/styles/domain changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -19,6 +19,7 @@ const APP_SHELL = [
   "./simulation.js",
   "./optimizer.js",
   "./advisor.js",
+  "./compliance.js",
   "./share.js",
   "./ifc.js",
   "./data.js",

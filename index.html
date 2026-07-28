@@ -273,6 +273,22 @@
         <div id="abOut" class="ab-out"><p class="empty">Pick two configs and compare.</p></div>
       </section>
 
+      <!-- Compliance Check: workplace-guideline-aware layout review.
+           Informed by German workplace guidelines - a DESIGN AID, not a
+           certification or Gefährdungsbeurteilung (see the header banner
+           and every report). Pure logic lives in compliance.js. -->
+      <section class="card" id="complCard">
+        <h2 class="card-title">Compliance Check</h2>
+        <div id="complDisclaimer" class="compl-disclaimer">
+          <strong>Design aid, NOT a certification, legal-compliance guarantee, or Gefährdungsbeurteilung.</strong>
+          Informed by German workplace guidelines (ASR A1.8, ASR A2.3, DIN 15185). Verify any real design with the official texts and a qualified professional.
+        </div>
+        <p class="hint">Reviews the current layout against <strong>published German workplace-guideline values</strong> — working aisles (<em>informed by</em> DIN 15185), main traffic routes (ASR A1.8) and escape-route reachability/width (ASR A2.3). Each finding shows the measured value, the informed-by guidance value and the offending element. Deterministic, fully offline. The figures are guidance, not legally binding limits.</p>
+        <button id="complBtn" class="btn primary wide" type="button">Run compliance check</button>
+        <div id="complSummary" class="compl-summary" hidden></div>
+        <div id="complOut" class="compl-out"><p class="empty">Run the check to see pass / warn / fail findings. Click a finding to highlight the element(s) on the floor.</p></div>
+      </section>
+
       <!-- P2: German-standards panel (collapsible) -->
       <section class="card">
         <details id="stdDetails">
@@ -307,16 +323,17 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> share -> ifc -> data -> app.
-       (advisor uses the optimizer; both use domain + sim; app reads the
-        tier capability flags from tiers.js, the share-link codec from
-        share.js, the IFC writer from ifc.js and the CSV import parser
-        from data.js.) -->
+  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> compliance -> share -> ifc -> data -> app.
+       (advisor uses the optimizer; both use domain + sim; compliance uses
+        the shared aisle/guideline logic in domain.js; app reads the tier
+        capability flags from tiers.js, the share-link codec from share.js,
+        the IFC writer from ifc.js and the CSV import parser from data.js.) -->
   <script src="domain.js"></script>
   <script src="tiers.js"></script>
   <script src="simulation.js"></script>
   <script src="optimizer.js"></script>
   <script src="advisor.js"></script>
+  <script src="compliance.js"></script>
   <script src="share.js"></script>
   <script src="ifc.js"></script>
   <script src="data.js"></script>

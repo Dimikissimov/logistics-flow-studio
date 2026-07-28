@@ -508,6 +508,64 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .std-applabel { font-weight: 700; color: var(--accent); }
 .std-disclaimer { font-size: 0.75rem; margin-top: 12px; padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--warn) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
 
+/* =====================================================================
+ * Compliance Check panel (compliance.js -> runCompliance). Pass/warn/fail
+ * badges reuse the shared severity palette. The prominent DE+EN
+ * "design aid, NOT a certification" banner is mandatory framing.
+ * ===================================================================== */
+.compl-disclaimer {
+  font-size: 0.75rem;
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  line-height: 1.45;
+}
+.compl-disclaimer strong { color: var(--warn); }
+.compl-disclaimer .compl-en { display: block; margin-top: 4px; }
+.compl-disclaimer .compl-de { display: block; margin-top: 6px; color: var(--text-dim); font-style: italic; }
+.compl-summary { display: flex; gap: 8px; margin: 10px 0 4px; }
+.compl-out { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.compl-out .empty { color: var(--text-dim); font-size: 0.8rem; }
+.cbadge {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.cbadge.pass { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.cbadge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.cbadge.fail { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.compl-item {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-dim);
+  border-radius: 9px;
+  background: var(--surface-2);
+  padding: 9px 11px;
+}
+.compl-item.fail { border-left-color: var(--danger); }
+.compl-item.warn { border-left-color: var(--warn); }
+.compl-item.pass { border-left-color: var(--ok); }
+.compl-item[role="button"] { cursor: pointer; }
+.compl-item[role="button"]:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.compl-item[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.compl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.compl-rule { font-weight: 650; font-size: 0.8rem; }
+.compl-line { font-size: 0.76rem; color: var(--text-dim); margin-top: 5px; line-height: 1.4; }
+.compl-line.de { font-style: italic; opacity: 0.85; }
+.compl-k {
+  display: inline-block; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em;
+  font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--accent) 16%, transparent);
+  padding: 0 6px; border-radius: 5px; margin-right: 4px;
+}
+.compl-loc { font-size: 0.68rem; color: var(--accent); margin-top: 6px; font-weight: 600; }
+
 /* ---- W3: bring your own data (CSV import) + floor-plan underlay ---- */
 .data-errors {
   margin: 8px 0;

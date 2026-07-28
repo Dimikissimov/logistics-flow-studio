@@ -51,6 +51,7 @@
     calibPts: [], // up to 2 clicked points (image-pixel coords)
     drag: null, // {id, offsetX, offsetY, moved}
     preview: null, // optimizer proposal: [{id,type,x,y,w,d}] shown as ghosts
+    complianceHighlight: null, // element ids highlighted from a Compliance Check finding
     showHeat: false, // pick-traffic heatmap overlay toggle
     history: [], // run history rows (session-only, see pushHistory)
     historyN: 0, // monotonically increasing run number for the table
@@ -228,6 +229,22 @@
       ctx.stroke();
     }
     ctx.restore();
+
+    // Compliance Check highlight: a bright ring around the element(s)
+    // named by a finding the user clicked in the Compliance panel.
+    if (state.complianceHighlight && state.complianceHighlight.length) {
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = COLORS.io;
+      for (const id of state.complianceHighlight) {
+        const e = state.elements.find((x) => x.id === id);
+        if (!e) continue;
+        roundRect(e.x * cellPx + 1, e.y * cellPx + 1, e.w * cellPx - 2, e.d * cellPx - 2, 7);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     // optimizer preview ghosts (proposed positions)
     if (state.preview) {
@@ -683,6 +700,8 @@
 
   canvas.addEventListener("pointerdown", (e) => {
     const { cx, cy } = pointerCell(e);
+    // Any direct canvas interaction clears a Compliance Check highlight.
+    if (state.complianceHighlight) state.complianceHighlight = null;
     // W3 underlay modes take the pointer before element editing.
     if (state.underlayMode === "calibrate" && state.underlay.img) {
       underlayCalibClick(cx * CELL_M, cy * CELL_M);
@@ -1407,6 +1426,76 @@
     }
   }
 
+  // ---- Compliance Check (workplace-guideline-aware) ----------------
+  // Wires the pure compliance.js report into a panel. The header carries
+  // the prominent DE+EN "design aid, NOT a certification" disclaimer,
+  // sourced from the module so there is ONE definition of the wording.
+  function buildCompliance() {
+    const d = $("complDisclaimer");
+    if (!d || !WT.compliance) return;
+    const dis = WT.compliance.DISCLAIMER;
+    d.innerHTML =
+      '<strong>Design aid, NOT a certification, legal-compliance guarantee, or Gefährdungsbeurteilung.</strong> ' +
+      `<span class="compl-en">${esc(dis.en)}</span>` +
+      `<span class="compl-de" lang="de">${esc(dis.de)}</span>`;
+  }
+
+  function runCompliance() {
+    readConfigFromUI();
+    const rep = WT.compliance.check(currentLayout(), simConfig());
+    const out = $("complOut");
+    const sum = $("complSummary");
+    sum.hidden = false;
+    sum.innerHTML =
+      `<span class="cbadge fail">${rep.summary.fail} fail</span>` +
+      `<span class="cbadge warn">${rep.summary.warn} warn</span>` +
+      `<span class="cbadge pass">${rep.summary.pass} pass</span>`;
+    out.innerHTML = rep.findings
+      .map((f, i) => {
+        const clickable = f.elements.length > 0;
+        const informed = f.informedBy ? esc(f.informedBy.label.en) : "";
+        const meas = f.measured
+          ? `<div class="compl-line"><span class="compl-k">Measured</span> ${esc(f.measured.label.en)} <span class="compl-k">Informed by</span> ${informed}</div>`
+          : (informed ? `<div class="compl-line"><span class="compl-k">Informed by</span> ${informed}</div>` : "");
+        return (
+          `<div class="compl-item ${f.status}" id="compl-f-${i}"` +
+          (clickable ? ' role="button" tabindex="0" title="Highlight the offending element(s) on the floor"' : "") +
+          ">" +
+          `<div class="compl-head"><span class="cbadge ${f.status}">${f.status}</span>` +
+          `<span class="compl-rule">${esc(f.guideline)} · ${esc(f.rule.en)}</span></div>` +
+          meas +
+          `<div class="compl-line">${esc(f.explain.en)}</div>` +
+          `<div class="compl-line de" lang="de">${esc(f.explain.de)}</div>` +
+          (clickable ? `<div class="compl-loc">${f.elements.length} element(s) — click to locate on the floor</div>` : "") +
+          "</div>"
+        );
+      })
+      .join("");
+    rep.findings.forEach((f, i) => {
+      if (!f.elements.length) return;
+      const node = $("compl-f-" + i);
+      if (!node) return;
+      const go = () => highlightCompliance(f.elements);
+      node.addEventListener("click", go);
+      node.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); }
+      });
+    });
+    status(
+      `Compliance check: ${rep.summary.fail} fail, ${rep.summary.warn} warn, ${rep.summary.pass} pass ` +
+      "— informed by German workplace guidelines, a design aid and NOT a certification."
+    );
+  }
+
+  function highlightCompliance(ids) {
+    state.complianceHighlight = ids.slice();
+    const first = state.elements.find((e) => ids.indexOf(e.id) !== -1);
+    if (first) { state.selectedId = first.id; renderProps(); }
+    render();
+    if (canvasWrap.scrollIntoView) canvasWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    status(`Highlighted ${ids.length} element(s) from the compliance finding on the floor.`);
+  }
+
   // ================================================================
   // CONFIG CONTROLS
   // ================================================================
@@ -1874,6 +1963,7 @@
       mk("pull-station", 34, 9, 2, 2),
     ];
     state.selectedId = null;
+    state.complianceHighlight = null;
     renderProps();
     render();
     scheduleSave();
@@ -1900,6 +1990,7 @@
     }));
     state.selectedId = null;
     state.preview = null;
+    state.complianceHighlight = null;
     if (p.config) {
       state.config = Object.assign(state.config, p.config);
     }
@@ -2524,6 +2615,7 @@
       if (!state.elements.length) return;
       state.elements = [];
       state.selectedId = null;
+      state.complianceHighlight = null;
       renderProps();
       render();
       scheduleSave();
@@ -2546,6 +2638,7 @@
     $("heatBtn").addEventListener("click", toggleHeat);
     $("histClearBtn").addEventListener("click", clearHistory);
     $("adviseBtn").addEventListener("click", runAdvisor);
+    $("complBtn").addEventListener("click", runCompliance);
     $("optimizeBtn").addEventListener("click", runOptimize);
     $("compareBtn").addEventListener("click", runCompare);
     $("helpBtn").addEventListener("click", () => { $("onboard").hidden = false; });
@@ -2557,6 +2650,7 @@
     buildConfigControls();
     buildAbControls();
     buildStandards();
+    buildCompliance();
     wireButtons();
     wireDataPanel();
     wireUnderlayPanel();

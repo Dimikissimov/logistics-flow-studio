@@ -164,6 +164,21 @@ This is a **design aid to keep layouts sane — it is not a compliance check or 
 
 ---
 
+## 6b. Compliance Check — workplace-guideline guidance values (`compliance.js`)
+
+The **Compliance Check** reviews a layout against **published German workplace-guideline values** and returns a structured pass/warn/fail report. Every value below is a **published guidance figure with an explicit derivation assumption** (kept in `domain.js` → `AISLE` and `COMPLIANCE`), used to keep a layout sensible — **not** a legally binding limit. Meeting them is **not** a certification, a legal-compliance guarantee, or a Gefährdungsbeurteilung.
+
+| Check (rule id) | Informed by | Guidance value used | Assumption / derivation |
+|---|---|---|---|
+| Working aisle width (`aisle-width`) | **DIN 15185** | min working aisle for the selected truck class (default 2.9 m; VNA 1.8, reach 2.9, counterbalance 3.8) | reuses the shared facing-pair aisle definition (`facingAislePairs`); a `warn` band of +0.25 m flags aisles that just meet the value |
+| Main traffic route (`traffic-route`) | **ASR A1.8** | 2.5 m clear run in front of a dock | transport-means envelope **assumed 1.5 m** + 2 × 0.5 m lateral safety clearances; flow connectors (staging, conveyor, pack, push/pull) count as passable because a dock feeding them *is* the designed material flow |
+| Escape route (`escape-route`) | **ASR A2.3** | 1.20 m clear width; ≤ 35 m travel to an exit | width for **assumed** up to ~200 persons (ASR A2.3 scales 0.875 → 2.40 m with occupancy); a 1 m occupancy grid means the width check flags single-cell pinches |
+| Blocked route (`blocked-route`) | ASR A1.8 / A2.3 | — | a dock door sealed shut by a rack (hard obstruction) |
+
+**Method (a geometric heuristic).** The layout is rasterised onto its 1-metre grid; **dock doors are treated as the building's exits** and every other placed element as a wall. Escape reachability is a multi-source BFS flooding from the dock cells through free floor — an element with no flooded neighbour cell is "boxed in" (fail). Route widths are read from single-cell pinches in the walkable network, and travel distance from the BFS depth. This approximates egress logic; it is **not** a fire-safety or building-code assessment, and the reachability/width/route checks are explicitly labelled **heuristic**. The report is deterministic (pure function of the layout + truck class) and every report embeds the bilingual not-a-certification disclaimer. Verified by `verify_compliance.js`.
+
+---
+
 ## 7. Simulation parameters (assumptions)
 
 All synthetic, all documented in `simulation.js`:

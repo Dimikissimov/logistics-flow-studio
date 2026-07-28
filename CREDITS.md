@@ -4,7 +4,7 @@ WarehouseTwin ships **only original or permissively-licensed open assets**. Ther
 
 ## Code
 
-- All application code (`index.html`, `styles.css`, `app.js`, `domain.js`, `simulation.js`, `optimizer.js`, `advisor.js`, `sw.js`) is **original**, written for this project — © 2026 Dimitres Kisimov, all rights reserved (see `LICENSE`). The Pass 2 advisor (`advisor.js`) is a hand-written rule/heuristic engine — no trained model, no third-party ML libraries.
+- All application code (`index.html`, `styles.css`, `app.js`, `domain.js`, `simulation.js`, `optimizer.js`, `advisor.js`, `compliance.js`, `sw.js`) is **original**, written for this project — © 2026 Dimitres Kisimov, all rights reserved (see `LICENSE`). The Pass 2 advisor (`advisor.js`) and the Compliance Check (`compliance.js`) are hand-written rule/heuristic engines — no trained model, no third-party ML libraries.
 - The seeded PRNG in `simulation.js` is **mulberry32**, a widely published public-domain one-liner (no attribution required); implemented here from scratch.
 
 ## Icons & graphics
@@ -24,7 +24,7 @@ WarehouseTwin ships **only original or permissively-licensed open assets**. Ther
 
 ## Data
 
-- **All data is synthetic and seeded.** No real inventory, orders, telemetry, or personal data. Pallet dimensions and the aisle rule are drawn from public standards/references (EPAL/UIC pallet sizes; DIN 15185 aisle guidance) and are cited in `docs/DOMAIN_NOTES.md`. Referencing a public standard's numbers is not a use of anyone's proprietary assets, and WarehouseTwin makes no certification claim.
+- **All data is synthetic and seeded.** No real inventory, orders, telemetry, or personal data. Pallet dimensions, the aisle rule and the Compliance Check guidance values are drawn from public standards/references (EPAL/UIC pallet sizes; DIN 15185 working-aisle guidance; ASR A1.8 traffic-route and ASR A2.3 escape-route guidance values, with the derivation assumptions written down in `domain.js` and `docs/DOMAIN_NOTES.md`). Referencing a public standard's published guidance numbers is not a use of anyone's proprietary assets, and WarehouseTwin makes **no certification claim** of any kind — the Compliance Check is a design aid, not a certification or a Gefährdungsbeurteilung.
 
 ## Runtime dependencies
 
