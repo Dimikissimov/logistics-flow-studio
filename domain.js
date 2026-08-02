@@ -262,6 +262,23 @@
       w: 3, d: 2, color: "#eab308", resizable: true, stage: "pack", heightM: 1.1,
       desc: "Packing/consolidation bench between picking and shipping. A complete outbound chain runs storage → (conveyor) → pack → outbound dock.",
     },
+    // TRANSPORT LANES (added for the AI Environment Generator). These are
+    // MOVEMENT elements, not storage: they hold ZERO pallet positions
+    // (elementCapacity() returns 0 because category !== "storage") but
+    // occupy floor cells like an aisle would. Honest, synthetic teaching
+    // elements — no vendor spec. The Python generator mirrors the exact
+    // type strings ("rgv"/"agv"). Category "flow" so the palette groups
+    // them with the other movement elements.
+    "rgv": {
+      id: "rgv", label: "RGV transport lane", category: "flow",
+      w: 4, d: 1, color: "#7c3aed", resizable: true, transport: true, heightM: 1.2,
+      desc: "Rail-guided-vehicle (RGV) shuttle lane — a powered transport track that carries loads between zones. Transport ONLY: it holds no pallet positions (0 storage capacity) but occupies floor like a reserved lane. Synthetic teaching element, not a vendor spec.",
+    },
+    "agv": {
+      id: "agv", label: "AGV / AMR route", category: "flow",
+      w: 4, d: 1, color: "#9333ea", resizable: true, transport: true, heightM: 0.8,
+      desc: "Automated-guided-vehicle / autonomous-mobile-robot travel lane. Transport ONLY: 0 storage capacity; occupies floor as a reserved robot path between zones. Synthetic teaching element, not a vendor spec.",
+    },
   };
 
   /* ------------------------------------------------------------------
@@ -636,6 +653,7 @@
       "cantilever", "asrs", "shuttle", "mezzanine",
       "dock-in", "dock-out", "staging", "conveyor",
       "push-station", "pull-station", "pack-station",
+      "rgv", "agv",
     ],
   };
 })();

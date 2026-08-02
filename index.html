@@ -48,6 +48,48 @@
   <main class="layout">
     <!-- LEFT: palette + layout actions -->
     <aside class="col left">
+      <!-- AI Environment Generator: build a whole valid layout from a plant
+           profile, then steer it with plain-language commands. Honest by
+           design - a deterministic rule/heuristic engine + offline NL
+           parsing, no cloud and no trained model (see the header note and
+           generate.js / nlcommands.js). -->
+      <section class="card" id="genCard">
+        <h2 class="card-title">Generate Environment (AI)</h2>
+        <div id="genHonesty" class="gen-honesty">
+          <strong>AI-assisted generative layout.</strong> A deterministic rule/heuristic engine plus offline
+          natural-language command parsing — it runs entirely in your browser, <strong>no cloud, no trained
+          black-box model</strong>. A generated baseline is a <em>best-practice-informed starting point, not an
+          engineered or certified plan</em>; it is checked against the same ASR/DIN guidance as the rest of the app
+          (informed by, not a certification).
+        </div>
+        <div class="field">
+          <label for="genProfileSelect">Plant profile / keyword</label>
+          <select id="genProfileSelect"></select>
+        </div>
+        <input id="genKeywordInput" class="gen-keyword" type="text"
+               placeholder="…or type a keyword, e.g. cold chain, automotive, spare parts, e-commerce" />
+        <p class="hint" id="genProfileDesc"></p>
+        <div class="gen-modes" role="group" aria-label="Generation mode">
+          <button id="genModeAuto" class="btn gen-mode active" type="button" aria-pressed="true"
+                  title="AI builds the whole environment">Auto</button>
+          <button id="genModeGuided" class="btn gen-mode" type="button" aria-pressed="false"
+                  title="Build a baseline, then refine it with typed commands">Guided</button>
+          <button id="genModeReserve" class="btn gen-mode" type="button" aria-pressed="false"
+                  title="Build, but leave the picking sector empty and reserved for you to expand">Manual-reserve</button>
+        </div>
+        <button id="genBtn" class="btn primary wide" type="button">Generate environment</button>
+        <div class="field" style="margin-top:10px">
+          <label for="genCmdInput">Steer it with a plain-language command</label>
+          <input id="genCmdInput" type="text"
+                 placeholder="e.g. include 2 more RGVs in the picking sector" />
+        </div>
+        <button id="genCmdBtn" class="btn wide" type="button">Run command</button>
+        <p class="hint">Try: <em>“leave zone picking for manual expansion”</em>, <em>“use the cold-chain baseline”</em>,
+          <em>“widen the main aisle to 4 m”</em>, <em>“remove the conveyor in packing”</em>. Unknown phrasing gets an
+          honest “didn’t understand”, never a silent guess.</p>
+        <div id="genLog" class="gen-log"><p class="empty">Pick a profile and Generate — every AI action is logged here with a plain-language explanation.</p></div>
+      </section>
+
       <section class="card">
         <h2 class="card-title">Palette</h2>
         <p class="hint">Click an item, then click the floor to place it. Drag to move. Select to edit — arrow keys nudge 1 m, Ctrl+D (or the Duplicate button) copies.</p>
@@ -334,6 +376,8 @@
   <script src="optimizer.js"></script>
   <script src="advisor.js"></script>
   <script src="compliance.js"></script>
+  <script src="generate.js"></script>
+  <script src="nlcommands.js"></script>
   <script src="share.js"></script>
   <script src="ifc.js"></script>
   <script src="data.js"></script>

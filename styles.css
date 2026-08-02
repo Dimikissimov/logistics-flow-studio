@@ -566,6 +566,58 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 }
 .compl-loc { font-size: 0.68rem; color: var(--accent); margin-top: 6px; font-weight: 600; }
 
+/* =====================================================================
+ * AI Environment Generator panel (generate.js + nlcommands.js).
+ * The honesty banner is mandatory framing: a deterministic engine, no
+ * cloud and no trained model - a starting point, not a certified plan.
+ * ===================================================================== */
+.gen-honesty {
+  font-size: 0.75rem;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  line-height: 1.45;
+}
+.gen-honesty strong { color: var(--accent); }
+.gen-keyword { width: 100%; margin-top: 6px; }
+.gen-modes { display: flex; gap: 6px; margin: 10px 0; }
+.gen-modes .gen-mode { flex: 1; padding: 7px 4px; font-size: 0.76rem; }
+.gen-mode.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-weight: 650;
+}
+.gen-log {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.gen-log .empty { color: var(--text-dim); font-size: 0.8rem; }
+.gen-log-item {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 9px;
+  background: var(--surface-2);
+  padding: 8px 11px;
+}
+.gen-log-item.ok { border-left-color: var(--ok); }
+.gen-log-item.warn { border-left-color: var(--warn); }
+.gen-log-item.info { border-left-color: var(--accent); }
+.gen-log-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gen-log-kind {
+  display: inline-block; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em;
+  font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--accent) 16%, transparent);
+  padding: 0 6px; border-radius: 5px;
+}
+.gen-log-echo { font-weight: 620; font-size: 0.8rem; }
+.gen-log-detail { font-size: 0.74rem; color: var(--text-dim); margin-top: 5px; line-height: 1.4; }
+
 /* ---- W3: bring your own data (CSV import) + floor-plan underlay ---- */
 .data-errors {
   margin: 8px 0;

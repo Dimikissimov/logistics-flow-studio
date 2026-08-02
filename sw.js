@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v13"; // Compliance Check (compliance.js added; index/app/styles/domain changed)
+const CACHE_VERSION = "wt-v14"; // AI Environment Generator (generate.js + nlcommands.js added; index/app/styles/domain changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -20,6 +20,8 @@ const APP_SHELL = [
   "./optimizer.js",
   "./advisor.js",
   "./compliance.js",
+  "./generate.js",
+  "./nlcommands.js",
   "./share.js",
   "./ifc.js",
   "./data.js",

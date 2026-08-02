@@ -55,6 +55,10 @@
     showHeat: false, // pick-traffic heatmap overlay toggle
     history: [], // run history rows (session-only, see pushHistory)
     historyN: 0, // monotonically increasing run number for the table
+    // AI Environment Generator (generate.js + nlcommands.js).
+    genMode: "auto", // "auto" | "guided" | "reserve"
+    genLayout: null, // last generated { elements, config, meta } (steering context)
+    genLog: [], // explainable action log entries {kind, echo, detail}
   };
 
   // ---------------- DOM refs ----------------
@@ -229,6 +233,9 @@
       ctx.stroke();
     }
     ctx.restore();
+
+    // AI Environment Generator: reserved-zone overlays (manual expansion).
+    drawGenZones();
 
     // Compliance Check highlight: a bright ring around the element(s)
     // named by a finding the user clicked in the Compliance panel.
@@ -649,6 +656,8 @@
       "push-station": "Push",
       "pull-station": "Pull",
       "pack-station": "Pack",
+      "rgv": "RGV lane",
+      "agv": "AGV route",
     })[type] || type;
   }
 
@@ -2003,6 +2012,242 @@
   }
 
   // ================================================================
+  // AI ENVIRONMENT GENERATOR (generate.js + nlcommands.js)
+  // ----------------------------------------------------------------
+  // HONEST framing (mirrored in the panel + README): a DETERMINISTIC
+  // rule/heuristic engine plus OFFLINE natural-language command parsing.
+  // No cloud, no trained black-box model. A generated baseline is a
+  // best-practice-informed STARTING POINT, not an engineered or certified
+  // plan, and it is checked against the same ASR/DIN guidance as the rest
+  // of the app (informed by, NOT a certification). Three modes: Auto (AI
+  // builds all), Guided (baseline + typed edits) and Manual-reserve (build
+  // but leave the picking sector empty for the user to expand).
+  // ================================================================
+  const GEN = WT.generate;
+  const NL = WT.nl;
+
+  function buildGeneratePanel() {
+    if (!GEN || !$("genProfileSelect")) return;
+    const sel = $("genProfileSelect");
+    sel.innerHTML = "";
+    Object.keys(GEN.plantProfiles).forEach((key) => {
+      const p = GEN.plantProfiles[key];
+      const o = document.createElement("option");
+      o.value = key;
+      o.textContent = p.label;
+      sel.appendChild(o);
+    });
+    updateGenProfileDesc();
+    sel.addEventListener("change", updateGenProfileDesc);
+    $("genKeywordInput").addEventListener("input", () => {
+      const k = matchGenProfile($("genKeywordInput").value);
+      if (k) { sel.value = k; updateGenProfileDesc(); }
+    });
+    [["genModeAuto", "auto"], ["genModeGuided", "guided"], ["genModeReserve", "reserve"]].forEach(([id, mode]) => {
+      $(id).addEventListener("click", () => setGenMode(mode));
+    });
+    $("genBtn").addEventListener("click", runGenerate);
+    $("genCmdBtn").addEventListener("click", runGenCommand);
+    $("genCmdInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); runGenCommand(); }
+    });
+    renderGenLog();
+  }
+
+  function updateGenProfileDesc() {
+    const key = $("genProfileSelect").value;
+    const p = GEN.plantProfiles[key];
+    $("genProfileDesc").textContent = p
+      ? p.label + " — " + p.keywords.join(", ") + ". Automation: " + p.automation + "."
+      : "";
+  }
+
+  // Map a free-text keyword to one of the 4 profile keys (contains scan).
+  function matchGenProfile(text) {
+    const t = String(text || "").toLowerCase();
+    if (!t.trim()) return null;
+    const table = {
+      "ecommerce-fulfilment": ["ecommerce", "e-commerce", "fulfil", "online", "b2c", "parcel"],
+      "spare-parts-distribution": ["spare", "aftermarket", "parts", "mro"],
+      "automotive-supply": ["auto", "car", "vehicle", "jit", "jis", "oem", "tier"],
+      "cold-chain": ["cold", "frozen", "chill", "refriger", "freezer", "temperature"],
+    };
+    let best = null, len = 0;
+    for (const k of Object.keys(table)) {
+      for (const s of table[k]) { if (t.indexOf(s) !== -1 && s.length > len) { best = k; len = s.length; } }
+    }
+    return best;
+  }
+
+  function setGenMode(mode) {
+    state.genMode = mode;
+    [["genModeAuto", "auto"], ["genModeGuided", "guided"], ["genModeReserve", "reserve"]].forEach(([id, m]) => {
+      const b = $(id);
+      if (!b) return;
+      b.classList.toggle("active", m === mode);
+      b.setAttribute("aria-pressed", String(m === mode));
+    });
+  }
+
+  function runGenerate() {
+    if (!GEN) return;
+    const key = $("genProfileSelect").value;
+    const p = GEN.plantProfiles[key];
+    if (!p) return;
+    const mode = state.genMode;
+    const reserve = mode === "reserve" ? ["picking"] : [];
+    let gen;
+    try {
+      gen = GEN.generateLayout(key, {
+        gridW: GRID_W, gridH: GRID_H,
+        seed: Number.isFinite(Number(state.config.seed)) ? Number(state.config.seed) : undefined,
+        reserve: reserve,
+      });
+    } catch (err) {
+      toast("Generate failed: " + err.message, "err");
+      return;
+    }
+    applyGeneratedLayout(gen, "generate");
+    const modeLabel = mode === "auto"
+      ? "Auto (AI builds all)"
+      : mode === "guided" ? "Guided (baseline + your edits)" : "Manual-reserve (picking left empty)";
+    logGen("ok", "Generated a " + p.label + " environment — " + modeLabel + ".", gen.meta.summary);
+    if (mode === "guided") logGen("info", "Guided mode: refine it with a plain-language command below.", "");
+    if (mode === "reserve") logGen("info", "The picking sector is reserved (empty, marked). Try: “include 2 more RGVs in the picking sector”.", "");
+    status("Generated a " + p.label + " layout (seed " + gen.meta.seed + "). AI-assisted starting point — checked against ASR/DIN guidance, not certified.");
+    toast("Environment generated. It's a best-practice-informed starting point, not a certified plan — steer it with a command or run the sim.");
+  }
+
+  // Adopt a generated/steered layout into the live editor state, keeping
+  // the zone tags (so later NL commands can target "the picking sector").
+  function applyGeneratedLayout(gen, source) {
+    state.genLayout = gen;
+    state.idCounter = 0;
+    state.elements = gen.elements.map((e) => {
+      const n = parseInt(String(e.id).replace(/\D/g, ""), 10);
+      if (!isNaN(n)) state.idCounter = Math.max(state.idCounter, n);
+      return { id: e.id, type: e.type, x: e.x, y: e.y, w: e.w, d: e.d, zone: e.zone };
+    });
+    state.selectedId = null;
+    state.preview = null;
+    state.complianceHighlight = null;
+    if (gen.config) {
+      state.config = Object.assign(state.config, {
+        seed: numOr(gen.config.seed, state.config.seed),
+        strategy: WT.tiers.coerceStrategy(D.STRATEGIES[gen.config.strategy] ? gen.config.strategy : state.config.strategy),
+        orders: numOr(gen.config.orders, state.config.orders),
+        skuCount: numOr(gen.config.skuCount, state.config.skuCount),
+        minAisleMetres: numOr(gen.config.minAisleMetres, state.config.minAisleMetres),
+        flowMode: gen.config.flowMode === "push" ? "push" : "pull",
+        demandSkew: numOr(gen.config.demandSkew, state.config.demandSkew),
+      });
+    }
+    pushConfigToUI();
+    renderProps();
+    render();
+    scheduleSave();
+    markKPIsStale();
+  }
+
+  // Rebuild the command context from the CURRENT floor (so manual edits
+  // are reflected), carrying the generator meta (profile/seed/reserved)
+  // from the last generate/steer step.
+  function currentGenLayout() {
+    const meta0 = state.genLayout ? state.genLayout.meta : { reserved: [] };
+    const reserved = (meta0.reserved || []).slice();
+    const zones = GEN.buildZones(state.elements, GRID_W, GRID_H, reserved);
+    return {
+      elements: state.elements.map((e) => ({ id: e.id, type: e.type, x: e.x, y: e.y, w: e.w, d: e.d, zone: e.zone })),
+      config: Object.assign({}, state.config),
+      meta: Object.assign({}, meta0, {
+        zones: zones, reserved: reserved, gridW: GRID_W, gridH: GRID_H,
+        counts: GEN.countByZone(state.elements),
+      }),
+      gridW: GRID_W, gridH: GRID_H,
+    };
+  }
+
+  function runGenCommand() {
+    if (!NL) return;
+    const inp = $("genCmdInput");
+    const text = (inp.value || "").trim();
+    if (!text) { toast("Type a command, e.g. “include 2 more RGVs in the picking sector”.", "warn"); return; }
+    const res = NL.apply(currentGenLayout(), text);
+    if (!res.ok) {
+      logGen("warn", "“" + text + "”", res.message);
+      status("Command not understood — the action log shows what I can do (I never silently guess).");
+      return;
+    }
+    applyGeneratedLayout(res.layout, "command");
+    logGen("ok", res.echo || res.message, res.parseEcho ? "Parsed as: " + res.parseEcho : "");
+    inp.value = "";
+    status(res.echo || "Command applied.");
+  }
+
+  function logGen(kind, echo, detail) {
+    state.genLog.push({ kind: kind, echo: echo, detail: detail });
+    if (state.genLog.length > 60) state.genLog.shift();
+    renderGenLog();
+  }
+
+  function renderGenLog() {
+    const wrap = $("genLog");
+    if (!wrap) return;
+    if (!state.genLog.length) {
+      wrap.innerHTML = '<p class="empty">Pick a profile and Generate — every AI action is logged here with a plain-language explanation.</p>';
+      return;
+    }
+    wrap.innerHTML = state.genLog
+      .slice()
+      .reverse()
+      .map((e) =>
+        '<div class="gen-log-item ' + esc(e.kind) + '">' +
+        '<div class="gen-log-head"><span class="gen-log-kind">' +
+        esc(e.kind === "ok" ? "applied" : e.kind === "warn" ? "not understood" : "note") +
+        '</span><span class="gen-log-echo">' + esc(e.echo) + "</span></div>" +
+        (e.detail ? '<div class="gen-log-detail">' + esc(e.detail) + "</div>" : "") +
+        "</div>"
+      )
+      .join("");
+  }
+
+  // Reserved-zone overlay (dashed hatch + label) from the last generated
+  // layout, so "leave zone X for manual expansion" is visible on the floor.
+  function drawGenZones() {
+    const gl = state.genLayout;
+    if (!gl || !gl.meta || !Array.isArray(gl.meta.zones)) return;
+    const reserved = gl.meta.zones.filter((z) => z.reserved);
+    if (!reserved.length) return;
+    ctx.save();
+    for (const z of reserved) {
+      const x = z.x * cellPx, y = z.y * cellPx, w = z.w * cellPx, h = z.d * cellPx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.clip();
+      ctx.strokeStyle = hexA(COLORS.io, 0.3);
+      ctx.lineWidth = 1;
+      for (let i = -h; i < w; i += 11) {
+        ctx.beginPath();
+        ctx.moveTo(x + i, y);
+        ctx.lineTo(x + i + h, y + h);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.setLineDash([7, 5]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = COLORS.io;
+      ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      ctx.setLineDash([]);
+      ctx.fillStyle = COLORS.io;
+      ctx.font = "700 11px system-ui, sans-serif";
+      ctx.textBaseline = "top";
+      ctx.fillText("RESERVED — " + z.label + " (manual expansion)", x + 6, y + 6);
+    }
+    ctx.restore();
+  }
+
+  // ================================================================
   // ONBOARDING
   // ================================================================
   const OB_KEY = "wt.onboarded.v1";
@@ -2651,6 +2896,7 @@
     buildAbControls();
     buildStandards();
     buildCompliance();
+    buildGeneratePanel();
     wireButtons();
     wireDataPanel();
     wireUnderlayPanel();

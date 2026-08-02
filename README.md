@@ -111,7 +111,50 @@ What it looks at, each **informed by** a named guideline (with the guideline's p
 
 Each finding carries the **measured value**, the **informed-by guidance value**, the **offending element id(s)** and a plain-language **DE + EN** explanation; click a finding to highlight those elements on the floor. The report is **deterministic and pure** (`compliance.js` — same layout in, byte-identical report out) and runs fully offline.
 
-Framed honestly, and non-negotiably: this is **a design aid, aligned to / informed by German workplace guidelines — explicitly NOT a certification, a legal-compliance guarantee, or a Gefährdungsbeurteilung (risk assessment).** The banner sits at the top of the panel and the same disclaimer (DE + EN) is embedded in every report, so a screenshot or logged report can never be mistaken for a certificate. The escape/traffic/blocked checks are geometric **heuristics** over a 1-metre occupancy grid (docks = exits, other elements = walls); they approximate egress logic, not a fire-safety or building-code assessment. Validated by `node verify_compliance.js` (harness 7 of 8 in `node test/run-all.mjs`): hand-built layouts assert the exact pass/warn/fail outcomes and measured/informed-by numbers, determinism, and that the not-a-certification disclaimer is present in the output.
+Framed honestly, and non-negotiably: this is **a design aid, aligned to / informed by German workplace guidelines — explicitly NOT a certification, a legal-compliance guarantee, or a Gefährdungsbeurteilung (risk assessment).** The banner sits at the top of the panel and the same disclaimer (DE + EN) is embedded in every report, so a screenshot or logged report can never be mistaken for a certificate. The escape/traffic/blocked checks are geometric **heuristics** over a 1-metre occupancy grid (docks = exits, other elements = walls); they approximate egress logic, not a fire-safety or building-code assessment. Validated by `node verify_compliance.js` (harness 7 of 9 in `node test/run-all.mjs`): hand-built layouts assert the exact pass/warn/fail outcomes and measured/informed-by numbers, determinism, and that the not-a-certification disclaimer is present in the output.
+
+## AI Environment Generator
+
+The **Generate Environment (AI)** panel (top of the left column) builds an entire valid warehouse/plant layout from a plant profile, then lets you steer it with plain-language instructions.
+
+**Honest framing (mandatory, in the UI and here):** this is an **AI-assisted generative layout — a deterministic rule/heuristic engine plus offline natural-language command parsing; it runs entirely in your browser, no cloud, no trained black-box model.** A generated baseline is **a best-practice-informed starting point, not an engineered or certified plan.** Every generated layout is checked against the same ASR/DIN guidance as the rest of the app (`compliance.js`) — *informed by, not a certification.* No GPU, no network, no new dependencies; it works on a normal laptop, fully offline, from `file://`.
+
+**Four plant profiles** (pinned keys the companion Python engine mirrors) — each with its own zone mix (receiving / storage / picking / packing / shipping), racking systems, minimum working aisle, dock counts and typical automation:
+
+- `ecommerce-fulfilment` — carton-flow + mezzanine small-item picking, an **AGV/AMR** spine + conveyor sortation, few in / many out docks, batch picking.
+- `spare-parts-distribution` — dense narrow-aisle (VNA) selective + shuttle small-parts + carton-flow, an **RGV** transport lane, zone picking on a very high SKU count.
+- `automotive-supply` — selective + pallet-flow + drive-in, an **RGV** transport spine feeding line-side pick faces, wave picking, many balanced JIT docks.
+- `cold-chain` — mobile (compact) racking + drive-in for density in the cooled volume, carton-flow pick faces, few insulated docks, push replenishment.
+
+`generateLayout(profileKey, {gridW, gridH, seed})` is **deterministic and seeded** — the same profile + seed yields byte-identical JSON — and the result is **overlap-free** and **passes (or at worst honestly warns)** the compliance check on the app's 40×24 m floor. Two new **transport** elements back the automation: `rgv` (rail-guided-vehicle lane) and `agv` (AGV/AMR route). Both are honest movement elements — they occupy floor like an aisle but hold **zero** storage capacity.
+
+**Three modes:** **Auto** (AI builds the whole environment), **Guided** (build a baseline, then refine it with typed commands) and **Manual-reserve** (build it, but leave the picking sector empty and visibly marked *reserved for manual expansion*).
+
+**Steer it in plain language** (offline, deterministic parser — `nlcommands.js`). Supported phrasings, each returning a structured op + a plain-language echo in the action log:
+
+| You type | It does |
+|---|---|
+| `include 2 more RGVs in the picking sector` | adds exactly +2 RGV lanes to the picking zone |
+| `leave zone picking for manual expansion` | empties the picking zone and marks it reserved |
+| `use the cold-chain baseline` | regenerates from that profile |
+| `remove the conveyor in packing` | removes that element from that zone |
+| `widen the main aisle to 4 m` | widens the working aisle and re-flows the baseline |
+
+Zone synonyms (`picking sector` / `pick area` / …) and element/number words are handled. **Unknown or ambiguous input is answered honestly** — `add 3 RGVs` with no zone, or gibberish, returns a *"couldn't understand / did you mean…"* with the list of what the parser supports. It **never silently guesses**.
+
+The floor is laid out as flow bands (a 2-cell clear buffer keeps the escape network off the perimeter walls):
+
+```
+row 0        docks-in  · · ·                         (receiving)
+rows 2–3     staging blocks under the docks          (receiving)
+rows 6…      full-width rack rows, one working aisle apart   (storage)
+             an RGV/AGV transport spine              (picking)
+             pick-face rows                          (picking)
+rows H-5,-4  pack stations   ── conveyor spine ──    (packing)
+row  H-1     docks-out · · ·                         (shipping)
+```
+
+Validated by `node verify_generate.js` (harness 8 of 9): the four pinned profile keys, `rgv`/`agv` as 0-capacity transport, byte-identical determinism per profile+seed, every profile overlap-free and passing/warning (never failing) compliance, the three modes, and the NL parser (the pinned `include 2 more RGVs in the picking sector` → +2 rgv, reserve / regenerate / widen / remove, and an honest not-understood on unknown input). Engine in `generate.js` (`WT.generate`), parser in `nlcommands.js` (`WT.nl`).
 
 ## Design philosophy
 

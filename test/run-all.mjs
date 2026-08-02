@@ -29,7 +29,14 @@
  *      traffic-route, escape-route and blocked-route rules (measured +
  *      informed-by numbers), determinism, and the not-a-certification
  *      disclaimer being present in the report output.
- *   8. tools/offline-guard.mjs - no external assets referenced from
+ *   8. verify_generate.js    - AI Environment Generator: the 4 pinned
+ *      plant profiles, rgv/agv as 0-capacity transport, seeded
+ *      determinism (byte-identical), every profile overlap-free and
+ *      passing/warning (never failing) compliance, the three modes, and
+ *      the offline NL parser (the pinned "include 2 more RGVs in the
+ *      picking sector" -> +2 rgv, reserve/regenerate/widen/remove, and
+ *      an honest not-understood on unknown input).
+ *   9. tools/offline-guard.mjs - no external assets referenced from
  *      any app file (the app must stay 100% offline).
  *
  * Usage:  node test/run-all.mjs
@@ -49,6 +56,7 @@ const HARNESSES = [
   { name: "CSV data import + determinism (verify_data.js)", args: ["verify_data.js"] },
   { name: "IFC export bridge (verify_ifc.js)", args: ["verify_ifc.js"] },
   { name: "Compliance Check findings (verify_compliance.js)", args: ["verify_compliance.js"] },
+  { name: "AI Environment Generator (verify_generate.js)", args: ["verify_generate.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
