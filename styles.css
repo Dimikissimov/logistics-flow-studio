@@ -618,6 +618,67 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .gen-log-echo { font-weight: 620; font-size: 0.8rem; }
 .gen-log-detail { font-size: 0.74rem; color: var(--text-dim); margin-top: 5px; line-height: 1.4; }
 
+/* ---- Example scenarios gallery (examples.js) ---- */
+.example-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.example-list .empty { color: var(--text-dim); font-size: 0.8rem; }
+.example-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.example-item:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.example-item.active {
+  border-left-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.example-name { font-weight: 640; font-size: 0.8rem; }
+.example-industry { font-size: 0.7rem; color: var(--text-dim); }
+.example-detail {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.example-desc { font-size: 0.78rem; line-height: 1.45; margin: 0 0 8px; }
+.example-synth {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.example-synth strong { color: var(--warn); }
+.example-data { margin: 0; display: grid; grid-template-columns: 1fr; gap: 3px; }
+.example-data > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.74rem;
+  padding: 2px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.example-data dt { color: var(--text-dim); margin: 0; }
+.example-data dd { margin: 0; text-align: right; font-weight: 560; }
+
 /* ---- W3: bring your own data (CSV import) + floor-plan underlay ---- */
 .data-errors {
   margin: 8px 0;

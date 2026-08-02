@@ -90,6 +90,34 @@
         <div id="genLog" class="gen-log"><p class="empty">Pick a profile and Generate — every AI action is logged here with a plain-language explanation.</p></div>
       </section>
 
+      <!-- Example scenarios: 20+ preselected, realistic-but-illustrative
+           set-ups spanning real industries. Click one to load it onto the
+           floor; export it as JSON + CSV. Honest by design — every
+           scenario is SYNTHETIC (no real company/brand) and its data is a
+           labelled plausible estimate, not measured (see examples.js). -->
+      <section class="card" id="examplesCard">
+        <h2 class="card-title">Example scenarios</h2>
+        <div class="gen-honesty">
+          <strong>20+ realistic-but-illustrative scenarios.</strong> Preselected real-world set-ups
+          (automotive JIT, cold-chain, pharma GDP, AS/RS high-bay, 3PL cross-dock, …). Each is a
+          <strong>SYNTHETIC scenario — no real company, brand or site</strong>; the operational figures are
+          <em>plausible estimates, labelled, not measured</em>. Layouts are checked against the same ASR/DIN
+          guidance as the rest of the app (informed by, not a certification). Click one to load it, then export the data.
+        </div>
+        <div class="field">
+          <label for="exampleSearch">Filter by name or industry</label>
+          <input id="exampleSearch" type="text" placeholder="e.g. cold, pharma, automotive, e-commerce" />
+        </div>
+        <div id="exampleList" class="example-list" role="listbox" aria-label="Example scenarios"></div>
+        <div id="exampleDetail" class="example-detail" hidden></div>
+        <div class="btn-grid" style="margin-top:10px">
+          <button id="exampleLoadBtn" class="btn primary" type="button" disabled title="Load the selected example onto the floor">Load onto floor</button>
+          <button id="exampleExportJsonBtn" class="btn" type="button" disabled title="Download the selected example as a wt-1 layout JSON (offline, nothing uploaded)">Export JSON</button>
+        </div>
+        <button id="exampleExportCsvBtn" class="btn wide" type="button" style="margin-top:8px" disabled title="Download the selected example as an Excel-openable CSV (elements + KPIs + the synthetic data profile)">Export data (CSV)</button>
+        <p class="hint">Exports are client-side downloads — <strong>fully offline, nothing is uploaded</strong>. The CSV lists every element (type, position, size, storage capacity) plus a KPI/summary block and the labelled synthetic data profile.</p>
+      </section>
+
       <section class="card">
         <h2 class="card-title">Palette</h2>
         <p class="hint">Click an item, then click the floor to place it. Drag to move. Select to edit — arrow keys nudge 1 m, Ctrl+D (or the Duplicate button) copies.</p>
@@ -378,6 +406,7 @@
   <script src="compliance.js"></script>
   <script src="generate.js"></script>
   <script src="nlcommands.js"></script>
+  <script src="examples.js"></script>
   <script src="share.js"></script>
   <script src="ifc.js"></script>
   <script src="data.js"></script>

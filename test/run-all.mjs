@@ -36,7 +36,14 @@
  *      the offline NL parser (the pinned "include 2 more RGVs in the
  *      picking sector" -> +2 rgv, reserve/regenerate/widen/remove, and
  *      an honest not-understood on unknown input).
- *   9. tools/offline-guard.mjs - no external assets referenced from
+ *   9. verify_examples.js    - Example Scenarios library + data export:
+ *      >=20 distinct realistic scenarios, every example builds
+ *      overlap-free and passes/warns (never fails) compliance, a
+ *      non-empty description + synthetic dataProfile each, item-type
+ *      coverage is a majority of the palette (asserted set), exportData
+ *      is a valid wt-1 layout and exportCsv a valid element+KPI+profile
+ *      CSV, and everything is byte-identical on re-run (determinism).
+ *  10. tools/offline-guard.mjs - no external assets referenced from
  *      any app file (the app must stay 100% offline).
  *
  * Usage:  node test/run-all.mjs
@@ -57,6 +64,7 @@ const HARNESSES = [
   { name: "IFC export bridge (verify_ifc.js)", args: ["verify_ifc.js"] },
   { name: "Compliance Check findings (verify_compliance.js)", args: ["verify_compliance.js"] },
   { name: "AI Environment Generator (verify_generate.js)", args: ["verify_generate.js"] },
+  { name: "Example Scenarios + data export (verify_examples.js)", args: ["verify_examples.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

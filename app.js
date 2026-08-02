@@ -2248,6 +2248,117 @@
   }
 
   // ================================================================
+  // EXAMPLE SCENARIOS (examples.js) — a gallery of 20+ preselected,
+  // realistic-but-illustrative SYNTHETIC set-ups spanning real industries.
+  // Click one to load it onto the floor; export it as a wt-1 JSON layout
+  // and an Excel-openable CSV. Fully offline (client-side Blob downloads).
+  // Honest by design: every scenario is labelled SYNTHETIC (no real
+  // company/brand) and its data profile is a plausible estimate, not
+  // measured. Loading reuses applyGeneratedLayout (same path as generate).
+  // ================================================================
+  const EX = WT.examples;
+  let selectedExampleId = null;
+
+  function buildExamplesPanel() {
+    if (!EX || !$("exampleList")) return;
+    renderExampleList("");
+    const search = $("exampleSearch");
+    if (search) search.addEventListener("input", () => renderExampleList(search.value));
+    $("exampleLoadBtn").addEventListener("click", () => { if (selectedExampleId) loadExample(selectedExampleId); });
+    $("exampleExportJsonBtn").addEventListener("click", exportExampleJSON);
+    $("exampleExportCsvBtn").addEventListener("click", exportExampleCsv);
+  }
+
+  function renderExampleList(filter) {
+    const wrap = $("exampleList");
+    if (!wrap) return;
+    const q = String(filter || "").trim().toLowerCase();
+    const lib = EX.library.filter((ex) => !q || (ex.name + " " + ex.industry).toLowerCase().indexOf(q) !== -1);
+    if (!lib.length) {
+      wrap.innerHTML = '<p class="empty">No scenario matches &ldquo;' + esc(filter) + '&rdquo;.</p>';
+      return;
+    }
+    wrap.innerHTML = lib.map((ex) =>
+      '<button type="button" class="example-item' + (ex.id === selectedExampleId ? " active" : "") +
+      '" data-id="' + esc(ex.id) + '" role="option" aria-selected="' + (ex.id === selectedExampleId) + '">' +
+      '<span class="example-name">' + esc(ex.name) + "</span>" +
+      '<span class="example-industry">' + esc(ex.industry) + "</span>" +
+      "</button>"
+    ).join("");
+    Array.prototype.forEach.call(wrap.querySelectorAll(".example-item"), (btn) => {
+      btn.addEventListener("click", () => selectExample(btn.getAttribute("data-id")));
+    });
+  }
+
+  function selectExample(id) {
+    const ex = EX.library.find((e) => e.id === id);
+    if (!ex) return;
+    selectedExampleId = id;
+    Array.prototype.forEach.call($("exampleList").querySelectorAll(".example-item"), (btn) => {
+      const on = btn.getAttribute("data-id") === id;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", String(on));
+    });
+    let b = null;
+    try { b = EX.build(id); } catch (_) {}
+    const dp = ex.dataProfile;
+    const detail = $("exampleDetail");
+    detail.hidden = false;
+    detail.innerHTML =
+      '<p class="example-desc">' + esc(ex.description) + "</p>" +
+      '<p class="example-synth"><strong>Synthetic scenario</strong> — no real company/brand; the figures below are plausible estimates, labelled, not measured.</p>' +
+      '<dl class="example-data">' +
+      exDataRow("SKUs", fmtInt(dp.skuCount)) +
+      exDataRow("Daily order lines", fmtInt(dp.dailyOrderLines)) +
+      exDataRow("Throughput", fmtInt(dp.throughputPerHour) + " lines/hr") +
+      exDataRow("Storage positions", fmtInt(dp.storagePositions)) +
+      exDataRow("Docks", String(dp.dockCount)) +
+      exDataRow("Staffing (est.)", dp.staffingFte + " FTE") +
+      exDataRow("Peak factor", dp.peakFactor + "× avg") +
+      exDataRow("Automation", esc(dp.automation)) +
+      (b ? exDataRow("Built layout", b.elements.length + " elements · " + b.meta.positions + " positions · compliance " + b.meta.compliance.worst) : "") +
+      "</dl>";
+    $("exampleLoadBtn").disabled = false;
+    $("exampleExportJsonBtn").disabled = false;
+    $("exampleExportCsvBtn").disabled = false;
+  }
+  function exDataRow(k, v) { return "<div><dt>" + esc(k) + "</dt><dd>" + v + "</dd></div>"; }
+  function fmtInt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+
+  function loadExample(id) {
+    let b;
+    try { b = EX.build(id); } catch (err) { toast("Could not build example: " + err.message, "err"); return; }
+    applyGeneratedLayout(b, "example");
+    const ex = EX.library.find((e) => e.id === id);
+    status("Loaded example: " + (ex ? ex.name : id) + ". Realistic-but-illustrative SYNTHETIC scenario — checked against ASR/DIN guidance, not certified. Run the sim or export the data.");
+    toast("Example loaded — a synthetic, illustrative scenario. Export it as JSON/CSV, or run the simulation.");
+  }
+
+  function downloadFile(filename, content, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportExampleJSON() {
+    if (!selectedExampleId) return;
+    const data = EX.exportData(selectedExampleId);
+    downloadFile("warehousetwin-example-" + selectedExampleId + ".json", JSON.stringify(data, null, 2), "application/json");
+    toast("Exported " + selectedExampleId + ".json (wt-1 layout — offline, nothing uploaded).");
+  }
+  function exportExampleCsv() {
+    if (!selectedExampleId) return;
+    const csv = EX.exportCsv(selectedExampleId);
+    downloadFile("warehousetwin-example-" + selectedExampleId + ".csv", csv, "text/csv");
+    toast("Exported " + selectedExampleId + ".csv (elements + KPIs + synthetic data profile).");
+  }
+
+  // ================================================================
   // ONBOARDING
   // ================================================================
   const OB_KEY = "wt.onboarded.v1";
@@ -2897,6 +3008,7 @@
     buildStandards();
     buildCompliance();
     buildGeneratePanel();
+    buildExamplesPanel();
     wireButtons();
     wireDataPanel();
     wireUnderlayPanel();
