@@ -100,6 +100,10 @@ h1, h2, h3 { margin: 0; font-weight: 650; }
   vertical-align: middle;
 }
 .topbar-actions { display: flex; gap: 8px; align-items: center; }
+/* Top quick-pick dropdown for the Example scenarios (loads onto the floor). */
+.topbar-examples { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; justify-content: center; }
+.topbar-examples-label { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.topbar-select { width: auto; min-width: 220px; max-width: 380px; font-size: 0.8rem; padding: 7px 10px; }
 
 /* ---------------- Buttons ---------------- */
 .btn {
@@ -354,6 +358,10 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   .col.left, .col.right { grid-column: auto; }
   .brand-text h1 { font-size: 0.95rem; }
   .brand-text p .tag { display: none; }
+  /* Give the quick-pick its own full-width row under brand + actions. */
+  .topbar { flex-wrap: wrap; }
+  .topbar-examples { order: 3; flex-basis: 100%; justify-content: stretch; }
+  .topbar-select { flex: 1 1 auto; min-width: 0; max-width: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

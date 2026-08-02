@@ -208,6 +208,37 @@ let threw = false;
 try { E.build("no-such-example-xyz"); } catch (_) { threw = true; }
 check("build() throws on an unknown example id (never guesses)", threw);
 
+/* ---- 11. Top quick-pick dropdown (exampleQuickPick) wiring ------ *
+ * The header dropdown must exist, ship ONLY a placeholder option (the 22
+ * scenarios are populated from the library at init, not hardcoded), be
+ * built at boot, and load via the SAME code path as the side-panel button
+ * (selectExample + loadExample). We can't run a DOM here, so we assert the
+ * static markup + the app.js wiring symbols, consistent with how the repo
+ * tests DOM wiring. */
+const indexHtml = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+const appJs = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
+
+check("index.html has a top #exampleQuickPick <select>",
+  /<select[^>]*\bid="exampleQuickPick"/.test(indexHtml));
+const qpBlock = (indexHtml.match(/<select[^>]*id="exampleQuickPick"[\s\S]*?<\/select>/) || [""])[0];
+const qpStaticOptions = (qpBlock.match(/<option/g) || []).length;
+check("exampleQuickPick ships exactly one static (placeholder) option; the 22 come from the library",
+  qpStaticOptions === 1, qpStaticOptions + " static <option>(s)");
+check("exampleQuickPick placeholder has an empty value (nothing preselected)",
+  /<option[^>]*value=""/.test(qpBlock));
+
+check("app.js defines buildExampleQuickPick() and calls it at boot",
+  /function buildExampleQuickPick\b/.test(appJs) && /buildExampleQuickPick\(\)/.test(appJs));
+check("dropdown is populated from EX.library (single source of truth, not 22 hardcoded)",
+  /function buildExampleQuickPick[\s\S]*?EX\.library[\s\S]*?forEach/.test(appJs));
+check("the side-panel Load button uses loadExample()",
+  /exampleLoadBtn"\)\.addEventListener\([\s\S]*?loadExample\(/.test(appJs));
+check("the dropdown change handler reuses the same loader (loadExample) and reflects the panel (selectExample)",
+  /function buildExampleQuickPick[\s\S]*?addEventListener\("change"[\s\S]*?selectExample\([\s\S]*?loadExample\(/.test(appJs));
+// After a load the dropdown returns to its placeholder so re-picking reloads.
+check("the dropdown resets to its placeholder after a successful load",
+  /function buildExampleQuickPick[\s\S]*?loadExample\([\s\S]*?selectedIndex\s*=\s*0/.test(appJs));
+
 /* ---- sample transcript, for the record -------------------------- */
 console.log("");
 console.log("Library (" + LIB.length + " scenarios):");

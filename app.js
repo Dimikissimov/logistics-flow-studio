@@ -2269,6 +2269,34 @@
     $("exampleExportCsvBtn").addEventListener("click", exportExampleCsv);
   }
 
+  // Top-header quick-pick: a prominent dropdown that loads any library
+  // scenario straight from the header. Populated from WT.examples.library
+  // at init (never a hardcoded list, so it stays in sync). On change it
+  // reuses the SAME code path as the side-panel "Load onto floor" button —
+  // selectExample() reflects the pick in the side panel (highlights the
+  // list item + enables its Export JSON/CSV buttons) and loadExample()
+  // builds and adopts the layout via applyGeneratedLayout. Resets to the
+  // placeholder after each load so re-picking the same scenario reloads it.
+  function buildExampleQuickPick() {
+    const sel = $("exampleQuickPick");
+    if (!sel || !EX) return;
+    const frag = document.createDocumentFragment();
+    EX.library.forEach((ex) => {
+      const opt = document.createElement("option");
+      opt.value = ex.id;
+      opt.textContent = ex.name + " — " + ex.industry;
+      frag.appendChild(opt);
+    });
+    sel.appendChild(frag);
+    sel.addEventListener("change", () => {
+      const id = sel.value;
+      if (!id) return;
+      selectExample(id); // reflect in the side panel (highlight + enable exports)
+      loadExample(id);   // load onto the floor — same loader as the panel button
+      sel.selectedIndex = 0; // back to the placeholder so re-picking reloads
+    });
+  }
+
   function renderExampleList(filter) {
     const wrap = $("exampleList");
     if (!wrap) return;
@@ -3009,6 +3037,7 @@
     buildCompliance();
     buildGeneratePanel();
     buildExamplesPanel();
+    buildExampleQuickPick();
     wireButtons();
     wireDataPanel();
     wireUnderlayPanel();

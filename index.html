@@ -32,6 +32,18 @@
         <p>WarehouseTwin — digital-twin simulator <span class="tag">synthetic data</span></p>
       </div>
     </div>
+    <!-- Top quick-pick: load any of the 22 SYNTHETIC example scenarios onto
+         the floor straight from the header. Populated from
+         WT.examples.library at init (app.js buildExampleQuickPick) so it
+         stays in sync; loading reuses the same path as the side-panel
+         "Load onto floor" button (selectExample + loadExample). -->
+    <div class="topbar-examples">
+      <label for="exampleQuickPick" class="topbar-examples-label">Example scenario</label>
+      <select id="exampleQuickPick" class="topbar-select"
+              title="Load one of the built-in synthetic example scenarios onto the floor (populated from the Example scenarios library; no real company/brand)">
+        <option value="" selected>— Load an example scenario —</option>
+      </select>
+    </div>
     <div class="topbar-actions">
       <!-- P5: the network-level companion app (lsp/) -->
       <a class="btn app-link" href="lsp/index.html" title="Open LSP Planner — the logistics-network planning game (levels, scoring, A/B compare)">LSP Planner &rarr;</a>
