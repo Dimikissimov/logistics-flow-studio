@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v25"; // P5 editable standards knowledge base (knowledge.js -> WT.kb): versioned, editable seed values the compliance/advisor/generator/capacity engines read fallback-safe; KB panel + import/export (knowledge/compliance/advisor/generate/domain/app/index/styles changed)
+const CACHE_VERSION = "wt-v26"; // P6 automation systems modeling (automation.js -> WT.automation): AS/RS, shuttle, RGV, AGV, conveyor as explicit per-system throughput contributors with editable KB cycle-time params (auto.*) + utilisation/constraint; refines WT.wms's flat automation multiplier into per-system per-stage contributions (no-automation behaviour unchanged); Automation panel (automation/wms/domain/knowledge/app/index/styles changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -29,6 +29,7 @@ const APP_SHELL = [
   "./ifc.js",
   "./data.js",
   "./wms.js",
+  "./automation.js",
   "./flowsim.js",
   "./kpicharts.js",
   "./wmsdata.js",

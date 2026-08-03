@@ -707,6 +707,19 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .wms-sources ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.45; }
 .wms-sources li { margin-bottom: 5px; }
 
+/* P6: Automation systems panel (reuses .wms-bar / .wms-badge). */
+.auto-systems { display: flex; flex-direction: column; gap: 7px; }
+.auto-sys {
+  border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 8px; padding: 8px 10px; background: var(--surface-2);
+}
+.auto-sys.constraint { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--surface-2)); }
+.auto-sys-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.auto-sys-label { font-weight: 650; font-size: 0.82rem; }
+.auto-sys-cap { margin-left: auto; font-family: var(--mono); font-size: 0.74rem; color: var(--text-dim); }
+.auto-sys-foot { font-size: 0.68rem; color: var(--text-dim); line-height: 1.4; }
+.auto-sys-foot .auto-kb code { font-size: 0.66rem; }
+
 /* =====================================================================
  * AI Environment Generator panel (generate.js + nlcommands.js).
  * The honesty banner is mandatory framing: a deterministic engine, no

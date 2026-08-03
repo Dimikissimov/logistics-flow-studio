@@ -78,8 +78,21 @@
     storageRatePerPosition: 0.15, // + per pallet position (a bigger store moves more internally)
 
     // Structural scaling factors (dimensionless).
-    autoBoostPerLane: 0.15, // each automation lane (conveyor/rgv/agv/asrs/shuttle) lifts a stage's rate
-    autoFactorMax: 2.5, // cap the automation multiplier so it stays sane
+    // autoBoostPerLane: DEPRECATED (P6). The old flat "+0.15 per lane"
+    // magic multiplier is superseded by the per-system automation model
+    // below (automationBoost) which derives each stage's lift from the
+    // modeled throughput of the automation systems that SERVE it. Kept
+    // only so the params echo in runOperations stays stable.
+    autoBoostPerLane: 0.15,
+    autoFactorMax: 2.5, // cap on ANY single stage's automation multiplier (stays sane)
+    // P6 automation model: reference automation throughput (units/hr) that
+    // corresponds to a "+1.0" (full doubling) lift to a stage's manual
+    // rate. Calibrated so ONE conveyor segment at its seed rate (180 u/hr,
+    // domain/KB) lifts a served stage by +0.15 - matching the previous
+    // flat per-lane boost - while every automation TYPE now contributes in
+    // proportion to its OWN modeled throughput (read from WT.kb "auto.*")
+    // instead of a flat +0.15. Transparent, editable, explainable.
+    autoRefUnitsPerHr: 1200,
     stagingM2PerTeam: 12, // every ~12 m^2 of staging buffer supports one more parallel put-away team
     chainReceiveBonus: 1.2, // receiving chained to storage flows put-away straight off the dock
     chainPutawayBonus: 1.3, // an inbound conveyor/staging chain speeds put-away
@@ -197,9 +210,126 @@
     };
   }
 
-  // Automation multiplier shared by the stages it applies to.
+  /* ------------------------------------------------------------------
+   * P6 AUTOMATION MODEL - per-system throughput contributions.
+   *
+   * Instead of a single flat "+0.15 per lane" magic multiplier, each
+   * automation SYSTEM contributes a modeled throughput (units/hr) from a
+   * transparent cycle-time param, and that throughput LIFTS the WMS stages
+   * the system serves. The per-unit rates are read FALLBACK-SAFE from the
+   * editable KB (WT.kb "auto.*"), exactly like domain.elementCapacity reads
+   * rack densities: when the KB is absent or untouched they reproduce the
+   * domain seed (AS/RS & shuttle machine cycleSec; RGV/AGV/conveyor
+   * movesPerHr/unitsPerHr) BYTE-IDENTICALLY, so behaviour is unchanged;
+   * editing a value flows straight into the automation throughput and the
+   * stage capacities. Pure, deterministic, offline.
+   *
+   * REGRESSION GUARANTEE: with NO automation elements every served-stage
+   * total is 0, so every stage multiplier is exactly 1.0 - identical to the
+   * pre-P6 behaviour (the old autoFactor was 1 when automationIndex == 0).
+   * order-picking is intentionally NOT lifted here: its throughput comes
+   * from the seeded pick-travel sim, where AS/RS & shuttle already act via
+   * their goods-to-person cycleSec (no double counting).
+   * ------------------------------------------------------------------ */
+  // Which WMS stages each automation system type serves (honest heuristic
+  // mapping; order-picking excluded - see above).
+  const AUTO_SERVES = {
+    asrs: ["storage", "replenishment"],
+    shuttle: ["storage", "replenishment"],
+    rgv: ["put-away", "replenishment", "shipping"],
+    agv: ["put-away", "replenishment", "packing", "shipping"],
+    conveyor: ["receiving", "put-away", "replenishment", "packing", "shipping"],
+  };
+
+  function kbGetNum(id) {
+    const kb = WT.kb;
+    if (kb && typeof kb.get === "function") {
+      const v = kb.get(id);
+      if (typeof v === "number" && isFinite(v) && v >= 0) return v;
+    }
+    return null;
+  }
+  function domainDef(type) { return (D && D.ELEMENTS && D.ELEMENTS[type]) || {}; }
+  function domainCycleRate(type, dfltSec) {
+    const def = domainDef(type);
+    const sec = typeof def.cycleSec === "number" && def.cycleSec > 0 ? def.cycleSec : dfltSec;
+    return Math.round(3600 / sec);
+  }
+  function domainFieldRate(type, field, dflt) {
+    const def = domainDef(type);
+    return typeof def[field] === "number" && def[field] >= 0 ? def[field] : dflt;
+  }
+  // Per-unit throughput (units/hr) for each automation system type. The KB
+  // is the editable source of truth; the domain seed is the fallback.
+  function autoUnitRates() {
+    const kAsrs = kbGetNum("auto.asrs.cyclesPerHr");
+    const kShut = kbGetNum("auto.shuttle.cyclesPerHr");
+    const kRgv = kbGetNum("auto.rgv.movesPerHr");
+    const kAgv = kbGetNum("auto.agv.movesPerHr");
+    const kConv = kbGetNum("auto.conveyor.unitsPerHr");
+    return {
+      asrs: kAsrs != null ? kAsrs : domainCycleRate("asrs", 45),
+      shuttle: kShut != null ? kShut : domainCycleRate("shuttle", 28),
+      rgv: kRgv != null ? kRgv : domainFieldRate("rgv", "movesPerHr", 60),
+      agv: kAgv != null ? kAgv : domainFieldRate("agv", "movesPerHr", 30),
+      conveyor: kConv != null ? kConv : domainFieldRate("conveyor", "unitsPerHr", 180),
+    };
+  }
+
+  // automationContributions(stats) -> per-system automation throughput
+  // { rows:[{type,label,unit,count,perUnitUnitsPerHr,rateLabel,
+  //          throughputUnitsPerHr,serves[]}], totalUnitsPerHr, ... }.
+  // Pure function of the layout stats + the KB. This is the "throughput
+  // per automation system" the report/panel and automation.js reuse.
+  function automationContributions(stats) {
+    const rates = autoUnitRates();
+    const spec = [
+      { type: "asrs", label: "AS/RS crane aisle", unit: "aisle", rateLabel: "cycles/hr", rate: rates.asrs, count: stats.asrs },
+      { type: "shuttle", label: "Shuttle system", unit: "system", rateLabel: "cycles/hr", rate: rates.shuttle, count: stats.shuttle },
+      { type: "rgv", label: "RGV transport lane", unit: "lane", rateLabel: "moves/hr", rate: rates.rgv, count: stats.rgv },
+      { type: "agv", label: "AGV / AMR route", unit: "route", rateLabel: "moves/hr", rate: rates.agv, count: stats.agv },
+      { type: "conveyor", label: "Conveyor segment", unit: "segment", rateLabel: "units/hr", rate: rates.conveyor, count: stats.conveyor },
+    ];
+    let total = 0;
+    const rows = spec.map((s) => {
+      const count = Math.max(0, s.count | 0);
+      const perUnit = Math.max(0, Number(s.rate) || 0);
+      const thr = count * perUnit;
+      total += thr;
+      return {
+        type: s.type, label: s.label, unit: s.unit, count: count,
+        perUnitUnitsPerHr: perUnit, rateLabel: s.rateLabel,
+        throughputUnitsPerHr: thr, serves: (AUTO_SERVES[s.type] || []).slice(),
+      };
+    });
+    return { rows: rows, totalUnitsPerHr: total, refUnitsPerHr: PARAMS.autoRefUnitsPerHr, maxFactor: PARAMS.autoFactorMax };
+  }
+
+  // automationBoost(stats) -> the per-stage automation multiplier map used
+  // by stageModel. served[stage] = sum of the throughput of the systems
+  // that serve that stage; mult[stage] = min(cap, 1 + served/ref). With no
+  // automation elements every mult is exactly 1 (regression guarantee).
+  const AUTOMATABLE_STAGES = ["receiving", "put-away", "storage", "replenishment", "packing", "shipping"];
+  function automationBoost(stats) {
+    const c = automationContributions(stats);
+    const served = {};
+    for (const st of AUTOMATABLE_STAGES) served[st] = 0;
+    for (const r of c.rows) {
+      for (const st of r.serves) if (st in served) served[st] += r.throughputUnitsPerHr;
+    }
+    const mult = {};
+    for (const st of AUTOMATABLE_STAGES) {
+      mult[st] = Math.min(PARAMS.autoFactorMax, 1 + served[st] / PARAMS.autoRefUnitsPerHr);
+    }
+    return { rows: c.rows, totalUnitsPerHr: c.totalUnitsPerHr, served: served, mult: mult, refUnitsPerHr: c.refUnitsPerHr, maxFactor: c.maxFactor };
+  }
+
+  // Back-compat scalar (aggregate) automation factor. No longer used to
+  // scale stages (that is now per-stage via automationBoost) but kept as a
+  // single headline number for callers/summaries. 1.0 when no automation.
   function autoFactor(stats) {
-    return Math.min(PARAMS.autoFactorMax, 1 + PARAMS.autoBoostPerLane * stats.automationIndex);
+    const c = automationContributions(stats);
+    return Math.min(PARAMS.autoFactorMax, 1 + c.totalUnitsPerHr / PARAMS.autoRefUnitsPerHr);
   }
 
   /* ------------------------------------------------------------------
@@ -227,7 +357,12 @@
     const run = resolveRun(layout, opts);
     const stats = layoutStats(layout);
     const P = PARAMS;
-    const af = autoFactor(stats);
+    // P6: per-stage automation multipliers derived from the modeled
+    // throughput of the automation systems that SERVE each stage (read
+    // fallback-safe from WT.kb "auto.*"). With no automation elements every
+    // entry is exactly 1 - identical to the pre-P6 flat factor of 1.
+    const autob = automationBoost(stats);
+    const am = autob.mult; // stage id -> multiplier (>= 1)
 
     // --- order-picking: REUSE the seeded pick-travel simulation --------
     const cfg = (layout && layout.config) || {};
@@ -254,20 +389,23 @@
     const pickingUnitsPerHr = pickingOrdersPerHr > 0 ? pickingOrdersPerHr * run.avgUnitsPerOrder : P.putawayTeamUnitsHr;
 
     // --- capacities (units/hr) ----------------------------------------
-    const receiving = Math.max(1, stats.dockIn) * P.receiveUnitsPerDockHr * af *
+    // Each automatable stage is lifted by its OWN automation multiplier
+    // am[stage] (from the systems that serve it), replacing the single flat
+    // factor. order-picking is untouched (it comes from the sim).
+    const receiving = Math.max(1, stats.dockIn) * P.receiveUnitsPerDockHr * am["receiving"] *
       (stats.inboundConnected ? P.chainReceiveBonus : 1);
 
     const putawayTeams = 1 + Math.floor(stats.stagingAreaM2 / P.stagingM2PerTeam);
-    const putaway = P.putawayTeamUnitsHr * putawayTeams * af *
+    const putaway = P.putawayTeamUnitsHr * putawayTeams * am["put-away"] *
       (stats.inboundConnected ? P.chainPutawayBonus : 1);
 
-    const storage = (P.storageBaseUnitsHr + stats.positions * P.storageRatePerPosition) * af;
+    const storage = (P.storageBaseUnitsHr + stats.positions * P.storageRatePerPosition) * am["storage"];
 
-    const replenishment = P.replenTeamUnitsHr * (1 + P.replenPerPickFace * stats.pickFaces) * af;
+    const replenishment = P.replenTeamUnitsHr * (1 + P.replenPerPickFace * stats.pickFaces) * am["replenishment"];
 
-    const packing = Math.max(1, stats.packStations) * P.packUnitsPerStationHr * af;
+    const packing = Math.max(1, stats.packStations) * P.packUnitsPerStationHr * am["packing"];
 
-    const shipping = Math.max(1, stats.dockOut) * P.shipUnitsPerDockHr * af;
+    const shipping = Math.max(1, stats.dockOut) * P.shipUnitsPerDockHr * am["shipping"];
 
     const capByStage = {
       "receiving": receiving,
@@ -551,5 +689,12 @@
     capacities: capacities,
     layoutStats: layoutStats,
     mulberry32: mulberry32,
+    // P6 automation model (the single source of truth for the per-system
+    // automation throughput math; WT.automation reuses these).
+    AUTO_SERVES: AUTO_SERVES,
+    autoUnitRates: autoUnitRates,
+    automationContributions: automationContributions,
+    automationBoost: automationBoost,
+    autoFactor: autoFactor,
   };
 })();

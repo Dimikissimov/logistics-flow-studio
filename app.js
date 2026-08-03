@@ -84,6 +84,12 @@
     storageAssignmentSig: null,
     storageSource: "synthetic",
     showOccupancy: false,
+    // P6 automation: `showAutoUtil` toggles the automation-utilisation
+    // canvas overlay; `autoUtilByEl` caches per-element utilisation % from
+    // the last Analyse automation run so the overlay can colour each
+    // automation element (drawn in the world transform, zoom/pan-safe).
+    showAutoUtil: false,
+    autoUtilByType: null,
     panMode: false, // view hand/pan mode (toolbar toggle)
     // View mode: "top" = the accurate, EDITABLE top-down floor plan (the
     // source of truth); "iso" = the ILLUSTRATIVE 2.5D isometric
@@ -355,6 +361,11 @@
     // top of the racks, inside the SAME world transform, so it is zoom/pan
     // safe. Toggled from the Storage & inventory panel.
     if (state.showOccupancy) drawStorageOccupancy();
+
+    // P6: automation utilisation overlay (colours automation elements by
+    // utilisation vs the flow demand). Same world transform -> zoom/pan safe.
+    // Toggled from the Automation systems panel.
+    if (state.showAutoUtil) drawAutomationUtil();
 
     // P3: material-flow chain arrows + broken-chain markers
     const chains = D.analyzeChains(state.elements);
@@ -2821,6 +2832,138 @@
   }
 
   // ================================================================
+  // P6: AUTOMATION SYSTEMS (automation.js -> WT.automation)
+  // ================================================================
+  // Models the AS/RS, shuttle, RGV, AGV and conveyor systems on the
+  // CURRENT floor as EXPLICIT throughput contributors: per-unit cycle
+  // rate (editable KB auto.*) x count -> modeled units/hr, utilisation vs
+  // the WMS flow demand, and the automation constraint in plain language.
+  // Reuses WT.wms's per-system throughput math (single source of truth).
+  // Everything SYNTHETIC + VDI-informed; NOT measured, NOT a certification.
+  // Same layout + KB -> identical report (deterministic).
+  // ================================================================
+  function runAutomation() {
+    if (!WT.automation) { toast("Automation systems need automation.js.", "warn"); return; }
+    readConfigFromUI();
+    const out = $("autoOut");
+    const layout = currentLayout();
+    // Demand = the WMS operations flow throughput (units/hr) on this floor.
+    let demand;
+    try {
+      const res = WT.wms.runOperations(layout, { seed: Math.max(0, Math.round(Number(state.config.seed) || 0)) });
+      demand = WT.wms.kpis(res, layout).throughputUnitsPerHr;
+    } catch (_) { demand = undefined; }
+
+    const rep = WT.automation.report(layout, demand);
+    state.autoUtilByType = {};
+    for (const u of rep.utilisation) state.autoUtilByType[u.type] = u;
+
+    if (!rep.hasAutomation) {
+      out.innerHTML =
+        '<p class="empty">No automation systems on this floor — throughput is fully manual (the WMS result is unchanged from a hand-worked flow). ' +
+        'Add a <strong>conveyor</strong>, <strong>RGV</strong>, <strong>AGV</strong>, <strong>AS/RS</strong> or <strong>shuttle</strong> from the palette, then analyse again.</p>';
+      if (state.showAutoUtil) { state.showAutoUtil = false; syncAutoOverlayBtn(); render(); }
+      status("Automation: no automation elements on the floor — flow is fully manual (WMS unchanged).");
+      return;
+    }
+
+    const dem = Math.round(rep.demandUnitsPerHr);
+    // ---- per-system rows: throughput + utilisation bar ----------------
+    const uByType = {};
+    for (const u of rep.utilisation) uByType[u.type] = u;
+    const rows = rep.systems.map((s) => {
+      const u = uByType[s.type] || { utilisationPct: 0, overCapacity: false };
+      const pct = isFinite(u.utilisationPct) ? u.utilisationPct : 999;
+      const barPct = Math.max(0, Math.min(100, pct));
+      const col = u.overCapacity ? "#ef4444" : pct >= 90 ? "#f59e0b" : "#22c55e";
+      const isConstraint = rep.constraint.present && rep.constraint.type === s.type;
+      return (
+        `<div class="auto-sys${isConstraint ? " constraint" : ""}">` +
+        `<div class="auto-sys-head">` +
+        `<span class="auto-sys-label">${esc(s.count + "× " + s.label)}</span>` +
+        (isConstraint ? '<span class="wms-badge crit">constraint</span>' : "") +
+        `<span class="auto-sys-cap">${Math.round(s.throughputUnitsPerHr).toLocaleString("en-US")} u/hr</span>` +
+        `</div>` +
+        `<div class="wms-bar" title="Utilisation = flow demand ÷ modeled throughput">` +
+        `<div class="wms-bar-fill" style="width:${barPct}%;background:${col}"></div>` +
+        `<span class="wms-bar-txt">${pct > 999 ? "≫100" : Math.round(pct)}% used${u.overCapacity ? " · OVER CAPACITY" : ""}</span></div>` +
+        `<div class="auto-sys-foot">${s.count} × ${Math.round(s.perUnitThroughputUnitsPerHr).toLocaleString("en-US")} ${esc(s.rateLabel)} · serves ${esc(s.serves.join(", ") || "—")} · <span class="auto-kb">KB <code>${esc(s.kbId)}</code></span></div>` +
+        `</div>`
+      );
+    }).join("");
+
+    const tp = rep.throughput;
+    const kcards = [
+      kcard("Automation throughput", Math.round(tp.totalUnitsPerHr).toLocaleString("en-US"), "units / hr"),
+      kcard("Flow demand", dem.toLocaleString("en-US"), "units / hr"),
+      kcard("Systems", String(rep.systems.length), "type" + (rep.systems.length === 1 ? "" : "s")),
+    ].join("");
+
+    out.innerHTML =
+      `<div class="wms-bottleneck-note"><span class="wms-badge crit">constraint</span> ${esc(rep.constraint.plain)}</div>` +
+      `<div class="auto-systems">${rows}</div>` +
+      `<h3 class="wms-h3">Automation summary <span class="wms-synth">SYNTHETIC · VDI-informed heuristic</span></h3>` +
+      `<div class="kpi">${kcards}</div>` +
+      `<p class="kpi-note">${esc(rep.summary)}</p>` +
+      `<p class="kpi-note">Per-unit cycle rates are editable in the <strong>Knowledge base</strong> panel (<code>auto.*</code>) — changing one moves both these numbers and the WMS stage capacities. ${esc(rep.dataLabel)}</p>`;
+
+    if (state.showAutoUtil) render();
+    status(
+      `Automation: ${Math.round(tp.totalUnitsPerHr).toLocaleString("en-US")} u/hr modeled handling throughput vs ${dem.toLocaleString("en-US")} u/hr demand` +
+      (rep.constraint.present ? `, constraint = ${esc(rep.constraint.label)}` : "") +
+      " — VDI-informed heuristic, not measured, not a certification."
+    );
+  }
+
+  function syncAutoOverlayBtn() {
+    const b = $("autoOverlayBtn");
+    if (b) { b.classList.toggle("active", state.showAutoUtil); b.setAttribute("aria-pressed", String(state.showAutoUtil)); }
+  }
+
+  // Toggle the automation-utilisation canvas overlay. Colours each
+  // automation element by its utilisation % (green < 70, amber < 90, red =
+  // over capacity), drawn in the SAME world transform (zoom/pan-safe).
+  function toggleAutoUtil() {
+    if (!state.autoUtilByType) runAutomation(); // populate from a fresh run
+    state.showAutoUtil = !state.showAutoUtil;
+    syncAutoOverlayBtn();
+    render();
+    status(state.showAutoUtil
+      ? "Automation utilisation overlay on — automation elements shaded by utilisation vs the flow demand (green < 70, amber < 90, red = over capacity). Synthetic VDI-informed heuristic."
+      : "Automation utilisation overlay off.");
+  }
+
+  const AUTO_OVERLAY_TYPES = { asrs: 1, shuttle: 1, rgv: 1, agv: 1, conveyor: 1 };
+  function drawAutomationUtil() {
+    const byType = state.autoUtilByType;
+    if (!byType) return;
+    for (const e of state.elements) {
+      if (!AUTO_OVERLAY_TYPES[e.type]) continue;
+      const u = byType[e.type];
+      if (!u) continue;
+      const pct = isFinite(u.utilisationPct) ? u.utilisationPct : 999;
+      const col = u.overCapacity ? "#ef4444" : pct >= 90 ? "#f59e0b" : "#22c55e";
+      const px = e.x * cellPx, py = e.y * cellPx, pw = e.w * cellPx, ph = e.d * cellPx;
+      ctx.save();
+      ctx.fillStyle = hexA(col, 0.34);
+      ctx.fillRect(px + 2, py + 2, pw - 4, ph - 4);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = hexA(col, 0.95);
+      roundRect(px + 2, py + 2, pw - 4, ph - 4, 5);
+      ctx.stroke();
+      if (pw > 30 && ph > 16) {
+        ctx.fillStyle = COLORS.text;
+        ctx.font = "700 " + Math.max(9, Math.min(12, cellPx * 0.5)) + "px system-ui, sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "center";
+        ctx.fillText((pct > 999 ? "≫100" : Math.round(pct)) + "%", px + pw / 2, py + ph / 2);
+        ctx.textAlign = "left";
+      }
+      ctx.restore();
+    }
+  }
+
+  // ================================================================
   // CONFIG CONTROLS
   // ================================================================
   // Shared, tier-aware strategy <select> filler (used by the sim panel
@@ -4647,6 +4790,8 @@
     $("adviseBtn").addEventListener("click", runAdvisor);
     $("complBtn").addEventListener("click", runCompliance);
     $("wmsBtn").addEventListener("click", runWmsOps);
+    if ($("autoBtn")) $("autoBtn").addEventListener("click", runAutomation);
+    if ($("autoOverlayBtn")) $("autoOverlayBtn").addEventListener("click", toggleAutoUtil);
     wireFlowControls();
     $("optimizeBtn").addEventListener("click", runOptimize);
     $("compareBtn").addEventListener("click", runCompare);

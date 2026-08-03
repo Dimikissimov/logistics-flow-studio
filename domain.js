@@ -245,6 +245,12 @@
     "conveyor": {
       id: "conveyor", label: "Conveyor segment", category: "flow",
       w: 6, d: 1, color: "#64748b", resizable: true, heightM: 0.9,
+      // unitsPerHr: throughput of ONE powered conveyor segment (units/hr).
+      // Synthetic order-of-magnitude teaching value, informed by general
+      // material-flow throughput practice (VDI 4480 family). Seeds the
+      // editable KB entry "auto.conveyor.unitsPerHr" and the automation
+      // throughput model (automation.js / WT.wms). NOT a vendor spec.
+      unitsPerHr: 180,
       desc: "Powered conveyor segment for internal material flow between zones.",
     },
     "push-station": {
@@ -272,11 +278,19 @@
     "rgv": {
       id: "rgv", label: "RGV transport lane", category: "flow",
       w: 4, d: 1, color: "#7c3aed", resizable: true, transport: true, heightM: 1.2,
+      // movesPerHr: transport moves per hour of ONE rail-guided-vehicle
+      // lane. Synthetic teaching value informed by VDI 2510 (AGV systems)
+      // transport-cycle framing; seeds "auto.rgv.movesPerHr". NOT measured.
+      movesPerHr: 60,
       desc: "Rail-guided-vehicle (RGV) shuttle lane — a powered transport track that carries loads between zones. Transport ONLY: it holds no pallet positions (0 storage capacity) but occupies floor like a reserved lane. Synthetic teaching element, not a vendor spec.",
     },
     "agv": {
       id: "agv", label: "AGV / AMR route", category: "flow",
       w: 4, d: 1, color: "#9333ea", resizable: true, transport: true, heightM: 0.8,
+      // movesPerHr: delivery moves per hour of ONE AGV / AMR route.
+      // Informed by VDI 2510 (Automated Guided Vehicle Systems); seeds
+      // "auto.agv.movesPerHr". Synthetic teaching value, NOT a vendor spec.
+      movesPerHr: 30,
       desc: "Automated-guided-vehicle / autonomous-mobile-robot travel lane. Transport ONLY: 0 storage capacity; occupies floor as a reserved robot path between zones. Synthetic teaching element, not a vendor spec.",
     },
   };

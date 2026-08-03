@@ -389,6 +389,27 @@
         <div id="wmsOut" class="wms-out"><p class="empty">Run to see the 7-stage flow (per-stage throughput, load and backlog), the warehouse KPI summary and the bottleneck stage in plain language.</p></div>
       </section>
 
+      <!-- P6: Automation systems — model the AS/RS, shuttle, RGV, AGV and
+           conveyor systems on the floor as EXPLICIT throughput contributors
+           with editable cycle-time params (KB auto.*) and utilisation vs the
+           flow demand, instead of one flat multiplier. Pure model lives in
+           automation.js (WT.automation); it reuses the WT.wms per-system
+           throughput math (single source of truth). With no automation
+           elements the WMS behaviour is byte-identical to before. -->
+      <section class="card" id="autoCard">
+        <h2 class="card-title">Automation systems</h2>
+        <div class="wms-disclaimer">
+          <strong>SYNTHETIC automation model — a transparent, VDI-informed cycle-time HEURISTIC, NOT measured, NOT a vendor spec and NOT a certification.</strong>
+          Per-unit throughputs (AS/RS &amp; shuttle machine cycles, RGV/AGV moves, conveyor units per hour) are editable in the <strong>Knowledge base</strong> (<code>auto.*</code>), informed by <strong>VDI 4480</strong> (throughput of storage/retrieval) and <strong>VDI 2510</strong> (AGV systems). Utilisation is <em>demand ÷ modeled throughput</em>.
+        </div>
+        <p class="hint">Models the warehouse <strong>automation systems on the current floor</strong> — <strong>AS/RS, shuttle, RGV, AGV, conveyor</strong> — as explicit throughput contributors: each system's per-unit cycle rate × its count gives a modeled units/hr that lifts the WMS stages it serves (this <em>refines</em> the old flat automation multiplier into per-system contributions). Utilisation compares each system against the flow demand from the WMS run and flags the constraint honestly. Editing a cycle-time in the Knowledge base changes the numbers here <em>and</em> the WMS capacities. Deterministic — same layout + KB → identical report.</p>
+        <div class="btn-grid">
+          <button id="autoBtn" class="btn primary" type="button" title="Model the automation systems on the current floor against the WMS flow demand (deterministic)">▶ Analyse automation</button>
+          <button id="autoOverlayBtn" class="btn" type="button" aria-pressed="false" title="Shade each automation element on the canvas by its utilisation % vs the flow demand (green &lt; 70, amber &lt; 90, red = over capacity). Drawn in the world transform — zoom/pan safe.">Utilisation overlay</button>
+        </div>
+        <div id="autoOut" class="wms-out"><p class="empty">Click <strong>Analyse automation</strong> to see the AS/RS, shuttle, RGV, AGV and conveyor systems on the floor with their modeled throughput, their utilisation vs the WMS flow demand, and the automation constraint in plain language. With no automation elements the flow stays fully manual (and the WMS result is unchanged).</p></div>
+      </section>
+
       <!-- P4: Storage & inventory — connect the SKU master to PHYSICAL
            storage locations. Slot SKUs into the racking by ABC / velocity
            (fast movers into the golden zone near the docks), track
@@ -612,6 +633,7 @@
   <script src="ifc.js"></script>
   <script src="data.js"></script>
   <script src="wms.js"></script>
+  <script src="automation.js"></script>
   <script src="flowsim.js"></script>
   <script src="kpicharts.js"></script>
   <script src="wmsdata.js"></script>

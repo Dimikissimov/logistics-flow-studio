@@ -69,6 +69,8 @@
       desc: "Per-plant-profile working-aisle the AI Environment Generator builds to." },
     { key: "rack", label: "Rack-type parameters",
       desc: "Per storage-system capacity/height assumptions (order-of-magnitude teaching values)." },
+    { key: "automation", label: "Automation throughput params",
+      desc: "Per automation-system cycle-time / throughput assumptions the automation model (WT.automation) and the WMS capacity layer read (informed by VDI 4480 / VDI 2510)." },
   ];
 
   // ------------------------------------------------------------------
@@ -198,6 +200,57 @@
       });
     }
   }
+
+  /* ---- automation throughput params (phase P6). These are the editable
+   * per-system cycle-time / throughput values the automation model
+   * (automation.js -> WT.automation) and the WMS capacity layer read
+   * fallback-safe, so an untouched/absent KB reproduces the domain seed
+   * exactly (BYTE-IDENTICAL default) while an edited value flows straight
+   * into the modeled automation throughput and the stage capacities.
+   *
+   * SEEDED FROM DOMAIN so they can never drift from the model: AS/RS and
+   * shuttle from the goods-to-person machine cycleSec (cycles/hr =
+   * round(3600 / cycleSec)); RGV/AGV/conveyor from their domain
+   * movesPerHr / unitsPerHr fields. Informed by VDI 4480 (throughput
+   * determination for storage/retrieval machines) and VDI 2510 (AGV
+   * systems). A transparent cycle-time HEURISTIC - NOT measured, NOT a
+   * vendor spec, NOT a certification. ---- */
+  const AUTO_SOURCE_ASRS =
+    "AS/RS stacker-crane dual-command cycle throughput. Cycles/hr = round(3600 / domain cycleSec ~45 s). Informed by VDI 4480 (throughput determination for storage/retrieval) and VDI 3564 high-bay design. Synthetic teaching value, NOT measured, NOT a vendor spec.";
+  const AUTO_SOURCE_SHUTTLE =
+    "Shuttle+lift channel cycle throughput. Cycles/hr = round(3600 / domain cycleSec ~28 s). Informed by VDI 4480 (throughput determination for storage/retrieval). Synthetic teaching value, NOT measured, NOT a vendor spec.";
+  const AUTO_SOURCE_RGV =
+    "Rail-guided-vehicle transport moves per hour per lane (domain movesPerHr). Informed by VDI 2510 (Automated Guided Vehicle Systems) transport-cycle framing. Synthetic teaching value, NOT measured, NOT a vendor spec.";
+  const AUTO_SOURCE_AGV =
+    "AGV / AMR delivery moves per hour per route (domain movesPerHr). Informed by VDI 2510 (Automated Guided Vehicle Systems). Synthetic teaching value, NOT measured, NOT a vendor spec.";
+  const AUTO_SOURCE_CONVEYOR =
+    "Powered conveyor segment throughput (domain unitsPerHr). Informed by general material-flow throughput practice (VDI 4480 family). Synthetic teaching value, NOT measured, NOT a vendor spec.";
+  const AUTO_NOTE =
+    "A transparent, VDI-informed cycle-time heuristic - the user's to verify. NOT measured, NOT a vendor spec, NOT a certification.";
+  function cyclesPerHr(type, dfltSec) {
+    const def = ELS[type] || {};
+    const sec = typeof def.cycleSec === "number" && def.cycleSec > 0 ? def.cycleSec : dfltSec;
+    return Math.round(3600 / sec);
+  }
+  function fieldRate(type, field, dflt) {
+    const def = ELS[type] || {};
+    return typeof def[field] === "number" && def[field] >= 0 ? def[field] : dflt;
+  }
+  seed({ id: "auto.asrs.cyclesPerHr", category: "automation",
+    label: "AS/RS crane - storage/retrieval cycles per hour", value: cyclesPerHr("asrs", 45), unit: "cycles/hr",
+    source: AUTO_SOURCE_ASRS, note: AUTO_NOTE, editable: true, kind: "number", min: 1, max: 100000 });
+  seed({ id: "auto.shuttle.cyclesPerHr", category: "automation",
+    label: "Shuttle system - storage/retrieval cycles per hour", value: cyclesPerHr("shuttle", 28), unit: "cycles/hr",
+    source: AUTO_SOURCE_SHUTTLE, note: AUTO_NOTE, editable: true, kind: "number", min: 1, max: 100000 });
+  seed({ id: "auto.rgv.movesPerHr", category: "automation",
+    label: "RGV transport lane - moves per hour", value: fieldRate("rgv", "movesPerHr", 60), unit: "moves/hr",
+    source: AUTO_SOURCE_RGV, note: AUTO_NOTE, editable: true, kind: "number", min: 1, max: 100000 });
+  seed({ id: "auto.agv.movesPerHr", category: "automation",
+    label: "AGV / AMR route - moves per hour", value: fieldRate("agv", "movesPerHr", 30), unit: "moves/hr",
+    source: AUTO_SOURCE_AGV, note: AUTO_NOTE, editable: true, kind: "number", min: 1, max: 100000 });
+  seed({ id: "auto.conveyor.unitsPerHr", category: "automation",
+    label: "Conveyor segment - units per hour", value: fieldRate("conveyor", "unitsPerHr", 180), unit: "units/hr",
+    source: AUTO_SOURCE_CONVEYOR, note: AUTO_NOTE, editable: true, kind: "number", min: 1, max: 100000 });
 
   // ------------------------------------------------------------------
   // Build the store. `defaults` is a frozen id -> default-value map;

@@ -128,6 +128,18 @@
  *      guard), editing a rack density flows into elementCapacity (reset
  *      restores it), and the informed-by / NOT-a-certification / paywall
  *      "verify" honesty labels are present on the banner and every entry.
+ *  20. verify_automation.js - Automation systems modeling (P6): WT.automation
+ *      detects each automation type (asrs/shuttle/rgv/agv/conveyor) and
+ *      counts them, per-unit throughput == the editable KB cycle-time param
+ *      (auto.*), throughput scales with count AND with the KB param (editing
+ *      auto.asrs.cyclesPerHr changes the automation throughput AND the WMS
+ *      storage capacity - proves the wiring), utilisation == demand/
+ *      throughput with over-capacity flagged honestly, report() names the
+ *      automation constraint, the NO-automation regression guarantee (every
+ *      WMS stage multiplier == 1, so capacities equal the pre-P6 manual
+ *      formula), determinism, the auto.* KB defaults trace to the domain
+ *      model (no drift), and the VDI-informed / NOT measured / NOT a vendor
+ *      spec / NOT a certification honesty labels.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -157,6 +169,7 @@ const HARNESSES = [
   { name: "2.5D isometric presentation projection (verify_iso.js)", args: ["verify_iso.js"] },
   { name: "Storage & inventory: slotting/occupancy/retrieval (verify_storage.js)", args: ["verify_storage.js"] },
   { name: "Editable standards knowledge base (verify_kb.js)", args: ["verify_kb.js"] },
+  { name: "Automation systems modeling (verify_automation.js)", args: ["verify_automation.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
