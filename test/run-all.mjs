@@ -45,6 +45,13 @@
  *      CSV, and everything is byte-identical on re-run (determinism).
  *  10. tools/offline-guard.mjs - no external assets referenced from
  *      any app file (the app must stay 100% offline).
+ *  11. verify_wms.js          - WMS Operations layer (P2): the 7
+ *      standard workflow stages present in order, runOperations
+ *      deterministic across the MRO preset, an examples.js layout and a
+ *      generated layout, KPIs within sane bounds and grounded in ISO
+ *      22400 / standard practice, unit conservation, a more-docks/more-
+ *      automation monotonic throughput sanity check, a bottleneck stage
+ *      identified, and the SYNTHETIC + not-a-certification labels present.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -65,6 +72,7 @@ const HARNESSES = [
   { name: "Compliance Check findings (verify_compliance.js)", args: ["verify_compliance.js"] },
   { name: "AI Environment Generator (verify_generate.js)", args: ["verify_generate.js"] },
   { name: "Example Scenarios + data export (verify_examples.js)", args: ["verify_examples.js"] },
+  { name: "WMS Operations layer (verify_wms.js)", args: ["verify_wms.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

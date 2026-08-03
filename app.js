@@ -1506,6 +1506,96 @@
   }
 
   // ================================================================
+  // WMS OPERATIONS (P2)
+  // ----------------------------------------------------------------
+  // Runs the wms.js operations model on the CURRENT layout: a
+  // deterministic, seeded discrete flow of a synthetic order stream
+  // through the 7 standard workflow stages. The order-picking stage
+  // reuses the pick-travel sim. Renders the stage flow (per-stage
+  // throughput / load / backlog), the ISO-22400-grounded KPI summary
+  // and the bottleneck stage in plain language. Everything SYNTHETIC
+  // and labelled as such; same layout + seed + orders -> identical.
+  // ================================================================
+  function runWmsOps() {
+    if (!WT.wms) return;
+    readConfigFromUI();
+    const out = $("wmsOut");
+    const hours = Math.max(1, Math.round(Number($("wmsHoursInput").value) || 8));
+    const orders = Math.max(1, Math.round(Number($("wmsOrdersInput").value) || 300));
+    const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
+    // Carry the current sim settings (strategy / SKUs / flow) so the
+    // order-picking stage matches the Simulation panel's run; orders,
+    // hours and seed from this panel override.
+    const layout = Object.assign(currentLayout(), { config: state.config });
+    const result = WT.wms.runOperations(layout, { orders: orders, hours: hours, seed: seed });
+    const kp = WT.wms.kpis(result, layout);
+
+    if (!result.ok) {
+      out.innerHTML =
+        '<p class="empty">Add at least one storage element (racking or block stack) so the order-picking stage can run — then the full 7-stage flow has something to move.</p>';
+      status("WMS Operations: no storage on the floor — add racking to run the flow.");
+      return;
+    }
+
+    // ---- 7-stage flow (bars by capacity load; bottleneck highlighted) --
+    const stageRows = result.stages
+      .map((s, i) => {
+        const isBottleneck = i === kp.bottleneck.index;
+        const util = Math.max(0, Math.min(1, s.avgUtilisation));
+        const pct = (util * 100).toFixed(0);
+        const backlog =
+          s.maxBacklog > 0.5
+            ? `<span class="wms-badge back">peak backlog ${Math.round(s.maxBacklog).toLocaleString("en-US")}</span>`
+            : `<span class="wms-badge ok">no backlog</span>`;
+        return (
+          `<div class="wms-stage${isBottleneck ? " bottleneck" : ""}">` +
+          `<div class="wms-stage-head">` +
+          `<span class="wms-stage-n">${i + 1}</span>` +
+          `<span class="wms-stage-label">${esc(s.label)}</span>` +
+          (isBottleneck ? '<span class="wms-badge crit">bottleneck</span>' : "") +
+          `<span class="wms-stage-cap">${s.capacityUnitsPerHr.toFixed(0)} u/hr</span>` +
+          `</div>` +
+          `<div class="wms-bar" title="Average capacity used across the shift"><div class="wms-bar-fill${isBottleneck ? " crit" : ""}" style="width:${pct}%"></div><span class="wms-bar-txt">${pct}% load</span></div>` +
+          `<div class="wms-stage-foot">${Math.round(s.processed).toLocaleString("en-US")} units processed · ${backlog}</div>` +
+          `<div class="wms-stage-note">${esc(s.note)}</div>` +
+          `</div>`
+        );
+      })
+      .join("");
+
+    // ---- KPI summary (reuse the sim KPI card styling) ------------------
+    const fmt = (v, d) => (isFinite(v) ? Number(v).toFixed(d == null ? 1 : d) : "—");
+    const kcards = [
+      kcard("Throughput", fmt(kp.throughputUnitsPerHr, 0), "units / hr"),
+      kcard("Throughput", fmt(kp.throughputOrdersPerHr, 1), "orders / hr"),
+      kcard("Order cycle time", fmt(kp.orderCycleTimeMin, 1), "min (est.)"),
+      kcard("Dock-to-stock", fmt(kp.dockToStockMin, 1), "min (est.)"),
+      kcard("Picking productivity", fmt(kp.pickingLinesPerHr, 0), "lines / hr"),
+      kcard("Storage utilisation", fmt(kp.storageUtilPct, 1), "%"),
+    ].join("");
+
+    const kpiSources = kp.kpis
+      .map((k) => `<li><strong>${esc(k.label)}</strong> — ${esc(k.source)}</li>`)
+      .join("");
+
+    const shipped = Math.round(result.shippedUnits).toLocaleString("en-US");
+    const totalU = Math.round(result.totalUnits).toLocaleString("en-US");
+    const remain = Math.round(result.remainingWip).toLocaleString("en-US");
+
+    out.innerHTML =
+      `<div class="wms-bottleneck-note"><span class="wms-badge crit">bottleneck</span> ${esc(kp.bottleneck.plain)}</div>` +
+      `<div class="wms-stages">${stageRows}</div>` +
+      `<h3 class="wms-h3">Warehouse KPIs <span class="wms-synth">SYNTHETIC · grounded in ISO 22400 / standard practice</span></h3>` +
+      `<div class="kpi">${kcards}</div>` +
+      `<details class="wms-sources"><summary>KPI definitions &amp; sources</summary><ul>${kpiSources}</ul></details>` +
+      `<p class="kpi-note">Deterministic seeded flow — seed ${result.seed}, ${orders.toLocaleString("en-US")} orders over a ${hours}-hour shift (${totalU} units in, ${shipped} shipped, ${remain} still in progress at shift end). The order-picking stage reuses the pick-travel sim (${esc((result.sim && result.sim.strategy) || "abc")} slotting). ${esc(result.dataLabel)}</p>`;
+
+    status(
+      `WMS Operations: ${fmt(kp.throughputUnitsPerHr, 0)} units/hr shipped, bottleneck = ${esc(kp.bottleneck.label)} — synthetic teaching model, not a certification. Same seed → identical result.`
+    );
+  }
+
+  // ================================================================
   // CONFIG CONTROLS
   // ================================================================
   // Shared, tier-aware strategy <select> filler (used by the sim panel
@@ -3023,6 +3113,7 @@
     $("histClearBtn").addEventListener("click", clearHistory);
     $("adviseBtn").addEventListener("click", runAdvisor);
     $("complBtn").addEventListener("click", runCompliance);
+    $("wmsBtn").addEventListener("click", runWmsOps);
     $("optimizeBtn").addEventListener("click", runOptimize);
     $("compareBtn").addEventListener("click", runCompare);
     $("helpBtn").addEventListener("click", () => { $("onboard").hidden = false; });

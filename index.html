@@ -295,6 +295,31 @@
         <button id="histClearBtn" class="btn wide" type="button" hidden>Clear history</button>
       </section>
 
+      <!-- P2: WMS Operations — the standard warehouse workflow simulated
+           as a deterministic seeded flow over the CURRENT layout. Pure
+           logic lives in wms.js; the order-picking stage reuses the sim. -->
+      <section class="card" id="wmsCard">
+        <h2 class="card-title">WMS Operations</h2>
+        <div class="wms-disclaimer">
+          <strong>SYNTHETIC operations model — a transparent teaching heuristic, NOT a certification and NOT measured from a real site.</strong>
+          Per-stage throughputs are documented order-of-magnitude assumptions (see <code>wms.js</code>). The KPIs mirror the ISO 22400 discipline (formula · elements · unit · time behaviour), grounded in standard warehouse practice.
+        </div>
+        <p class="hint">Simulates the standard warehouse workflow — <strong>receiving → put-away → storage → replenishment → order-picking → packing → shipping</strong> — as a deterministic, seeded discrete flow of a synthetic order stream over the <strong>current layout</strong> (whatever is loaded: an example, a generated plant or a hand-built floor). The order-picking stage <em>reuses</em> the pick-travel simulation; each stage's throughput is derived from the layout (dock count, staging buffer, pick faces, pick-path length, automation lanes). Same layout + seed + orders → identical result.</p>
+        <div class="field-row">
+          <div class="field">
+            <label for="wmsHoursInput">Shift hours</label>
+            <input id="wmsHoursInput" type="number" value="8" min="1" step="1" />
+          </div>
+          <div class="field">
+            <label for="wmsOrdersInput">Orders</label>
+            <input id="wmsOrdersInput" type="number" value="300" min="1" step="10" />
+          </div>
+        </div>
+        <p class="hint">Seed comes from the Simulation panel above, so the picking stage matches your sim run.</p>
+        <button id="wmsBtn" class="btn primary wide" type="button">▶ Run WMS operations</button>
+        <div id="wmsOut" class="wms-out"><p class="empty">Run to see the 7-stage flow (per-stage throughput, load and backlog), the warehouse KPI summary and the bottleneck stage in plain language.</p></div>
+      </section>
+
       <!-- P3: unit-load catalog (pallets, cartons, totes) -->
       <section class="card">
         <details id="catalogDetails">
@@ -405,11 +430,12 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
-  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> compliance -> share -> ifc -> data -> app.
+  <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> compliance -> share -> ifc -> data -> wms -> app.
        (advisor uses the optimizer; both use domain + sim; compliance uses
-        the shared aisle/guideline logic in domain.js; app reads the tier
-        capability flags from tiers.js, the share-link codec from share.js,
-        the IFC writer from ifc.js and the CSV import parser from data.js.) -->
+        the shared aisle/guideline logic in domain.js; the WMS operations
+        layer in wms.js uses domain + sim; app reads the tier capability
+        flags from tiers.js, the share-link codec from share.js, the IFC
+        writer from ifc.js and the CSV import parser from data.js.) -->
   <script src="domain.js"></script>
   <script src="tiers.js"></script>
   <script src="simulation.js"></script>
@@ -422,6 +448,7 @@
   <script src="share.js"></script>
   <script src="ifc.js"></script>
   <script src="data.js"></script>
+  <script src="wms.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

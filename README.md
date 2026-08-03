@@ -96,7 +96,7 @@ Scope, honestly: **a scoped IFC4 export — elements as proxy solids for coordin
 - **`WT_ElementType` property set on every proxy:** element type, category, the assumed height, pallet positions and — for storage — a **VelocityClass** (A/B/C) *derived* from the ABC distance-to-I/O ranking the simulator teaches (an assumption, labelled as such in the property's description).
 - **Written from scratch, dependency-free:** [`ifc.js`](ifc.js) is a hand-rolled STEP serializer — no library, no WASM, no network — so the export works offline like everything else, and the whole entity graph is auditable in one file.
 
-Validation is two-layered: `node verify_ifc.js` (harness 6 of 10 in `node test/run-all.mjs`) checks the files **structurally** — STEP framing, every `#ref` resolving, entity counts matching the layout one-to-one, GlobalId rules, string escaping, byte-identical determinism — and then, as the **gold standard**, opens both exports with [ifcopenshell](https://ifcopenshell.org/) via `tools/validate_ifc.py`, asserting schema and entity counts (this step **skips with a printed note** on machines without Python/ifcopenshell; the structural checks always run). Viewer-testing is left as a user step — free options: **BIMvision**, **usBIM.viewer**, **Open IFC Viewer**.
+Validation is two-layered: `node verify_ifc.js` (harness 6 of 11 in `node test/run-all.mjs`) checks the files **structurally** — STEP framing, every `#ref` resolving, entity counts matching the layout one-to-one, GlobalId rules, string escaping, byte-identical determinism — and then, as the **gold standard**, opens both exports with [ifcopenshell](https://ifcopenshell.org/) via `tools/validate_ifc.py`, asserting schema and entity counts (this step **skips with a printed note** on machines without Python/ifcopenshell; the structural checks always run). Viewer-testing is left as a user step — free options: **BIMvision**, **usBIM.viewer**, **Open IFC Viewer**.
 
 ## Compliance Check
 
@@ -111,7 +111,38 @@ What it looks at, each **informed by** a named guideline (with the guideline's p
 
 Each finding carries the **measured value**, the **informed-by guidance value**, the **offending element id(s)** and a plain-language **DE + EN** explanation; click a finding to highlight those elements on the floor. The report is **deterministic and pure** (`compliance.js` — same layout in, byte-identical report out) and runs fully offline.
 
-Framed honestly, and non-negotiably: this is **a design aid, aligned to / informed by German workplace guidelines — explicitly NOT a certification, a legal-compliance guarantee, or a Gefährdungsbeurteilung (risk assessment).** The banner sits at the top of the panel and the same disclaimer (DE + EN) is embedded in every report, so a screenshot or logged report can never be mistaken for a certificate. The escape/traffic/blocked checks are geometric **heuristics** over a 1-metre occupancy grid (docks = exits, other elements = walls); they approximate egress logic, not a fire-safety or building-code assessment. Validated by `node verify_compliance.js` (harness 7 of 10 in `node test/run-all.mjs`): hand-built layouts assert the exact pass/warn/fail outcomes and measured/informed-by numbers, determinism, and that the not-a-certification disclaimer is present in the output.
+Framed honestly, and non-negotiably: this is **a design aid, aligned to / informed by German workplace guidelines — explicitly NOT a certification, a legal-compliance guarantee, or a Gefährdungsbeurteilung (risk assessment).** The banner sits at the top of the panel and the same disclaimer (DE + EN) is embedded in every report, so a screenshot or logged report can never be mistaken for a certificate. The escape/traffic/blocked checks are geometric **heuristics** over a 1-metre occupancy grid (docks = exits, other elements = walls); they approximate egress logic, not a fire-safety or building-code assessment. Validated by `node verify_compliance.js` (harness 7 of 11 in `node test/run-all.mjs`): hand-built layouts assert the exact pass/warn/fail outcomes and measured/informed-by numbers, determinism, and that the not-a-certification disclaimer is present in the output.
+
+## WMS Operations simulation (P2)
+
+The **WMS Operations** panel (right column) lifts the app from a *layout* simulator to a *warehouse-operations* one: it models the **standard warehouse workflow as a chain of processing stages** and runs a synthetic order/item stream through them over whatever layout is currently loaded — an example scenario, a generated plant, or a floor you built by hand.
+
+The seven stages, in order, are the WMS core process:
+
+**receiving → put-away → storage → replenishment → order-picking → packing → shipping**
+
+Each stage has a **throughput (units/hr) derived transparently from the layout**, and a seeded, deterministic discrete-flow engine (`wms.js`, `WT.wms.runOperations`) pushes the order stream through the tandem line tick by tick. When a stage's arrivals exceed its capacity a **backlog** builds, and the slowest stage is the **bottleneck** — reported in plain language. How each stage's throughput depends on the layout:
+
+- **Receiving / Shipping** — scale with the number of **inbound / outbound dock doors** × a synthetic per-dock rate.
+- **Put-away** — scales with parallel put-away teams inferred from the **staging-buffer area**, plus an inbound conveyor/staging **chain** bonus (reusing `domain.js` `analyzeChains`).
+- **Storage** — a **buffer** stage: a generous internal move rate that grows with **pallet positions**; rarely the rate bottleneck, so its meaningful KPI is storage utilisation.
+- **Replenishment** — scales with the number of **pick-face systems** (carton/pallet-flow, mezzanine, goods-to-person AS/RS & shuttle).
+- **Order-picking** — **reuses the existing seeded pick-travel simulation** (`WT.sim.run`) for this exact layout (travel + handling + slotting strategy), rather than re-modelling picking.
+- Every non-storage stage is additionally lifted by **automation lanes** (conveyor / RGV / AGV / AS-RS / shuttle) via a capped multiplier.
+
+The panel then shows the KPI summary. The KPIs are **grounded in ISO 22400 / standard warehouse practice** (the app mirrors the ISO 22400 *discipline* — formula · elements · unit · time behaviour — following the project's standards-corpus KPI catalogue), and each carries its own definition/source note in the UI:
+
+- **Throughput** (units/hr and orders/hr) — units shipped ÷ time period; ISO 22400 throughput-rate analogue.
+- **Order cycle time** (min) — order lead time, estimated as nominal per-stage handling latency + a Little's-Law queue-wait term (mean WIP ÷ throughput).
+- **Dock-to-stock time** (min) — receiving + put-away handling latency + their Little's-Law queue wait.
+- **Picking productivity** (lines/hr) — order lines ÷ picking labour hours, taken from the reused pick-travel sim.
+- **Storage utilisation** (%) — occupied ÷ total usable pallet positions.
+
+Framed honestly, and non-negotiably: **everything here is SYNTHETIC and the throughput model is a transparent, documented heuristic — the per-stage rate constants (`wms.js` `PARAMS`) are order-of-magnitude teaching values, NOT vendor specs and NOT measured from any real site. It is grounded in ISO 22400 / standard practice for the KPI discipline, but it is NOT a certification and NOT a measurement of a real operation.** A SYNTHETIC banner sits at the top of the panel and the same label is embedded in the result object, so a screenshot can never be mistaken for measured data.
+
+**What the model does *not* capture** (deliberate simplifications, all in service of a fully-offline, deterministic teaching twin): no stochastic breakdowns/absenteeism or shift patterns; a steady-state assumption that inbound units ≈ outbound units (one unit stream flows through all seven stages, 1 pick line = 1 handling unit); no labour rostering per stage beyond the throughput heuristic; no returns/quality/damage loops; the discrete flow uses 15-minute buckets, so sub-bucket latency is not resolved (a nominal per-stage handling latency stands in for it). The bottleneck is the lowest-capacity stage, not a queueing-network optimum.
+
+Determinism is the contract: **same layout + seed + orders → byte-identical result and KPIs.** All randomness flows through a seeded `mulberry32` PRNG — no `Date`, no `Math.random`. Validated by `node verify_wms.js` (harness 11 of 11 in `node test/run-all.mjs`, 32 checks): the seven stages present in order, `runOperations` deterministic across the MRO preset / an examples.js layout / a generated layout, KPIs within sane bounds and citing ISO 22400, unit conservation (shipped + WIP = total in), a *more docks + automation → higher throughput* monotonic sanity check, a bottleneck identified, and the SYNTHETIC + not-a-certification labels present in the output.
 
 ## AI Environment Generator
 
@@ -154,7 +185,7 @@ rows H-5,-4  pack stations   ── conveyor spine ──    (packing)
 row  H-1     docks-out · · ·                         (shipping)
 ```
 
-Validated by `node verify_generate.js` (harness 8 of 10): the four pinned profile keys, `rgv`/`agv` as 0-capacity transport, byte-identical determinism per profile+seed, every profile overlap-free and passing/warning (never failing) compliance, the three modes, and the NL parser (the pinned `include 2 more RGVs in the picking sector` → +2 rgv, reserve / regenerate / widen / remove, and an honest not-understood on unknown input). Engine in `generate.js` (`WT.generate`), parser in `nlcommands.js` (`WT.nl`).
+Validated by `node verify_generate.js` (harness 8 of 11): the four pinned profile keys, `rgv`/`agv` as 0-capacity transport, byte-identical determinism per profile+seed, every profile overlap-free and passing/warning (never failing) compliance, the three modes, and the NL parser (the pinned `include 2 more RGVs in the picking sector` → +2 rgv, reserve / regenerate / widen / remove, and an honest not-understood on unknown input). Engine in `generate.js` (`WT.generate`), parser in `nlcommands.js` (`WT.nl`).
 
 ## Example scenarios (20+) + data export
 
@@ -172,7 +203,7 @@ Collectively the set uses a **majority of the palette** — in fact **all 21 ele
 
 **Export (fully offline, nothing uploaded):** select an example and download it as a **wt-1 layout JSON** (`WT.examples.exportData` — the same schema as Export/Share/Import) or an **Excel-openable CSV** (`WT.examples.exportCsv`) that lists every element (type, position, size, storage capacity) plus a KPI/summary block (total positions, floor use %, aisle-compliance result, dock count) and the labelled synthetic data-profile rows. Both are deterministic — the same example yields byte-identical bytes. Downloads are client-side `Blob`s: no server, no network.
 
-Validated by `node verify_examples.js` (harness 9 of 10): ≥20 distinct scenarios, every example builds overlap-free and passes/warns (never fails) compliance, a non-empty description + synthetic data profile each, item-type coverage is a majority of the palette (asserted set), `exportData` is a valid wt-1 layout and `exportCsv` a valid element+KPI+profile CSV, and everything is byte-identical on re-run. Library + build + export in `examples.js` (`WT.examples`).
+Validated by `node verify_examples.js` (harness 9 of 11): ≥20 distinct scenarios, every example builds overlap-free and passes/warns (never fails) compliance, a non-empty description + synthetic data profile each, item-type coverage is a majority of the palette (asserted set), `exportData` is a valid wt-1 layout and `exportCsv` a valid element+KPI+profile CSV, and everything is byte-identical on re-run. Library + build + export in `examples.js` (`WT.examples`).
 
 ## Design philosophy
 
@@ -232,6 +263,7 @@ All five passes are shipped:
 - **W3 — real-world usability: your data + your floor plan. ✅ Done.** The CSV importer (`data.js` + the "Import your data" panel; row-numbered validation, honest synthetic-vs-yours labelling, sim/advisor/optimizer/A-B all running on the imported dataset, verified by `verify_data.js`) and the floor-plan image underlay with two-point scale calibration, align/opacity/hide controls and a localStorage size cap. Both full-tier, both offline, both excluded from share links — see "Use your own warehouse" above.
 - **W4 — Export to BIM (IFC). ✅ Done.** The dependency-free IFC4 (STEP) export bridge — `ifc.js` plus the "Export IFC (BIM)" button — validated structurally by `verify_ifc.js` and, as a gold standard, by ifcopenshell. See "Export to BIM (IFC)" above.
 - **W5 — Compliance Check. ✅ Done.** A workplace-guideline-aware layout review: `compliance.js` returns a deterministic, structured pass/warn/fail report (working aisles *informed by* DIN 15185, main traffic routes ASR A1.8, escape-route reachability/width ASR A2.3, blocked-route detection), each finding carrying measured + informed-by numbers, offending element ids and a DE/EN explanation. Wired to the "Compliance Check" panel with click-to-highlight and a prominent not-a-certification banner; verified by `verify_compliance.js`. Explicitly a design aid, **not** a certification or Gefährdungsbeurteilung. See "Compliance Check" above.
+- **W6 — WMS Operations layer (phase P2 of the WMS/plant-simulator plan). ✅ Done.** The core WMS operations model: `wms.js` (`WT.wms`) simulates the standard warehouse workflow — receiving → put-away → storage → replenishment → order-picking → packing → shipping — as a deterministic, seeded discrete flow of a synthetic order stream over the current layout, with per-stage throughput derived from the layout (docks, staging, pick faces, pick-path length, automation lanes) and the order-picking stage *reusing* the pick-travel sim. KPIs (throughput, order cycle time, dock-to-stock, picking productivity, storage utilisation) are grounded in ISO 22400 / standard practice with per-KPI source notes; the bottleneck stage is called out in plain language. Wired to the "WMS Operations" panel with a SYNTHETIC banner; verified by `verify_wms.js` (32 checks). A transparent teaching heuristic — all data SYNTHETIC, **not** a certification and **not** measured from a real site. See "WMS Operations simulation (P2)" above.
 
 ## Licence
 
