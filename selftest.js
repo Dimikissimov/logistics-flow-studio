@@ -12,8 +12,8 @@
  * boot. It writes a MACHINE-READABLE result into a #wt-selftest element
  * (created here) and console.log()s it, in one of two exact formats:
  *
- *     WT-SELFTEST: PASS 45/45
- *     WT-SELFTEST: FAIL 43/45 :: <comma-separated failed check names>
+ *     WT-SELFTEST: PASS 46/46
+ *     WT-SELFTEST: FAIL 44/46 :: <comma-separated failed check names>
  *
  * A maintainer runs it headlessly (e.g. headless Edge) and reads the
  * #wt-selftest text / the console line.
@@ -125,6 +125,25 @@
         ok: !!API && typeof API.loadExample === "function" && typeof API.runWmsOps === "function" && typeof API.render === "function",
         detail: API ? "attached" : "MISSING (__WT_TEST_API__)",
       };
+    });
+
+    // ---- v1.7 DEEP-LINK: the scenario deep-link parser exists + works --
+    // index.html?scenario=<id> opens that example scenario (and skips the
+    // welcome modal) at boot. Assert the PURE parser is present and returns
+    // a REAL library id verbatim, that ?onboarding=0 skips on its own, and
+    // that ?selftest=1 is NOT hijacked (no scenario, no skip).
+    check("deeplink-parser-parses-scenario", function () {
+      var DL = WT.deeplink;
+      if (!DL || typeof DL.parse !== "function") return { ok: false, detail: "WT.deeplink.parse MISSING" };
+      var ex = WT.examples && WT.examples.library && WT.examples.library[0];
+      if (!ex) return { ok: false, detail: "no example in library" };
+      var r = DL.parse("?scenario=" + ex.id);
+      var off = DL.parse("?onboarding=0");
+      var st = DL.parse("?selftest=1");
+      var ok = r.scenario === ex.id && r.skipOnboarding === true &&
+        off.skipOnboarding === true && st.scenario === null && st.skipOnboarding === false;
+      return { ok: ok, detail: "scenario=" + r.scenario + " skip=" + r.skipOnboarding +
+        " onboarding0=" + off.skipOnboarding + " selftestSafe=" + (st.scenario === null) };
     });
 
     // ---- Canvas exists + has a non-zero drawing buffer -----------------

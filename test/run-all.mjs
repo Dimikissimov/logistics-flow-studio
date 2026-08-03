@@ -277,6 +277,23 @@
  *      key sections, selftest.js carries the new a11y/perf checks, and the
  *      license stays proprietary (NO MIT in any touched file). A11y is real
  *      but NOT a WCAG certification; perf is bounded-effort, not a guarantee.
+ *  30. verify_deeplink.js   - Scenario deep-link parser (v1.7): the PURE,
+ *      DOM-free WT.deeplink.parse(search) that lets a URL open a specific
+ *      example scenario (and skip onboarding) so a plant is shareable/
+ *      embeddable with a link. Asserts ?scenario=<id> AND ?example=<id>
+ *      return that id with skipOnboarding true, ?onboarding=0 suppresses
+ *      the welcome modal on its own (?onboarding=1 keeps it), an empty /
+ *      "?" / non-string query and ?selftest=1 are a clean no-op (the
+ *      self-test flag is never hijacked), an unknown id is returned RAW
+ *      (the app validates it against WT.examples.library, not the parser),
+ *      a REAL library id round-trips, purity + determinism (reads no DOM -
+ *      proven with a poisoned document - never mutates its input, deep-
+ *      equal on re-run), composition with unrelated params order-
+ *      independently, that any scenario implies onboarding suppression,
+ *      and tolerance of a trailing #fragment / +-space / malformed %xx /
+ *      bare key without throwing. The DOM wiring (boot precedence + modal
+ *      suppression) is added by app.js and not headless-testable; the pure
+ *      parser + a live ?scenario= self-test check cover it.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -316,6 +333,7 @@ const HARNESSES = [
   { name: "Per-type 2D+3D shape registry (verify_shapes.js)", args: ["verify_shapes.js"] },
   { name: "Production hardening: error boundary + self-test + CSP (verify_hardening.js)", args: ["verify_hardening.js"] },
   { name: "Accessibility + large-layout performance (verify_a11y_perf.js)", args: ["verify_a11y_perf.js"] },
+  { name: "Scenario deep-link parser (verify_deeplink.js)", args: ["verify_deeplink.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

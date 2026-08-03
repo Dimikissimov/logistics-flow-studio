@@ -4520,6 +4520,27 @@
     toast("Example loaded — a synthetic, illustrative scenario. Export it as JSON/CSV, or run the simulation.");
   }
 
+  // Boot path: a ?scenario=<id> / ?example=<id> deep-link opens that library
+  // scenario straight onto the floor (via the SAME loadExample() the panel
+  // button + header quick-pick use), so a scenario is shareable/embeddable
+  // with a link. The id is validated HERE against WT.examples.library (the
+  // parser in deeplink.js stays pure and returns the raw id); a KNOWN id
+  // loads and returns true, an UNKNOWN id falls through to the normal boot
+  // with a gentle toast so a bad link never breaks the app. Nothing deep-
+  // link-specific is persisted (see maybeShowOnboard for the modal).
+  function loadScenarioDeepLink(id) {
+    if (!id) return false;
+    const known = EX && EX.library && EX.library.some((e) => e.id === id);
+    if (!known) {
+      // demoLayout()/loadSaved() run right after this returns; defer the
+      // toast so the heads-up survives their own status/toast messages.
+      setTimeout(() => toast('Unknown scenario "' + id + '" in the link — the app started normally instead.', "warn"), 0);
+      return false;
+    }
+    loadExample(id);
+    return true;
+  }
+
   function downloadFile(filename, content, mime) {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -4548,8 +4569,12 @@
   // ONBOARDING
   // ================================================================
   const OB_KEY = "wt.onboarded.v1";
-  function maybeShowOnboard() {
-    // Deep-link: append ?tour=off to the URL to skip the intro tour
+  function maybeShowOnboard(skip) {
+    // Deep-link (per-URL, NOT a saved preference): a ?scenario= load or an
+    // explicit ?onboarding=0 suppresses the welcome modal for THIS load only.
+    // It deliberately does NOT flip the OB_KEY "don't show again" flag.
+    if (skip) return;
+    // Legacy convention kept working: ?tour=off also skips the intro tour
     // (useful for demos/screenshots; reading location.search is offline-safe).
     if (location.search.indexOf("tour=off") !== -1) return;
     if (localStorage.getItem(OB_KEY) === "1") return;
@@ -5735,12 +5760,22 @@
     updateUnderlayUI();
     pushConfigToUI();
     resizeCanvas();
-    // load from a share link (#layout= fragment), else saved, else demo
-    if (!loadFromShareHash() && !loadSaved(true)) demoLayout();
+    // Deep-link intent from the query string (?scenario=/?example=,
+    // ?onboarding=0). Pure parse in deeplink.js; the app validates + acts.
+    const deeplink = (WT.deeplink && typeof WT.deeplink.parse === "function")
+      ? WT.deeplink.parse(location.search)
+      : { scenario: null, skipOnboarding: false };
+    // Boot precedence: an explicit #layout= share-hash wins, else a
+    // ?scenario= deep-link, else the saved layout, else the demo starter.
+    if (!loadFromShareHash() && !loadScenarioDeepLink(deeplink.scenario) && !loadSaved(true)) {
+      demoLayout();
+    }
     // P4: apply the tier gate to every gated control (palette, strategy
     // selects, preset button, tier badge). Default tier is "demo".
     applyTier();
-    maybeShowOnboard();
+    // A deep-link (a ?scenario= load or ?onboarding=0) suppresses the
+    // welcome modal for THIS load only - it never persists the preference.
+    maybeShowOnboard(deeplink.skipOnboarding);
     initInstallButton();
     registerSW();
     maybeExposeTestApi(); // ?selftest=1 only: expose the real handlers to selftest.js

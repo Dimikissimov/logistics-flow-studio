@@ -6,6 +6,54 @@ seeded teaching heuristic unless you import your own data** — informed by publ
 standards (ISO 22400, DIN 15185, ASR, EN, VDI), not a certification and not a
 measurement of a real site.
 
+## [1.7.0] — 2026-08-03
+
+### Added
+- **Deep-link to a scenario via URL.** A URL can now open a specific example
+  scenario (and skip the onboarding modal), so a synthetic plant is
+  **shareable/embeddable with a link** and a demo or screenshot can open a
+  chosen plant directly, unobstructed. Additive and non-breaking — a normal
+  load (no query flags) looks and behaves exactly as before.
+  - `index.html?scenario=<id>` (or the alias `?example=<id>`) where `<id>` is a
+    `WT.examples.library` id — e.g. `index.html?scenario=coldchain-frozen-dc` —
+    loads that scenario onto the floor **via the same `loadExample()` the side
+    panel and header quick-pick use** (no re-implementation) and suppresses the
+    welcome modal for that load so the plant shows immediately.
+  - `?onboarding=0` (also `false`/`off`/`no`) suppresses the welcome modal on
+    its own, without loading a scenario; a `?scenario=` implies it.
+  - **Nothing is persisted.** A deep-link is per-URL, not a saved preference —
+    it never flips the "don't show onboarding again" `localStorage` flag; it
+    only suppresses the modal for that one load. (Loading the scenario itself
+    autosaves the working layout exactly as the UI "Load onto floor" button
+    does — that is the shared loader's normal behaviour, unchanged.)
+  - **Unknown id is safe:** a `?scenario=` that isn't in the library falls
+    through to a normal boot with a gentle notice — a bad link never breaks the
+    app.
+  - **Composes with everything.** Boot **precedence**: an explicit `#layout=`
+    share-hash wins, else a `?scenario=` deep-link, else the saved layout, else
+    the demo starter. `?selftest=1` is never hijacked; `?tour=off` still works.
+  - The parsing is a **pure, DOM-free, deterministic** helper
+    `WT.deeplink.parse(search) → { scenario, skipOnboarding }` (`deeplink.js`)
+    that reads nothing, mutates nothing and does **not** validate the id (it
+    returns the raw id; the app validates it against the library) — so it is
+    fully headless-tested.
+- **New harness** `verify_deeplink.js` (**30th**): the parser returns the id
+  for `?scenario=` and `?example=` with onboarding suppressed, `?onboarding=0`
+  suppresses on its own (`?onboarding=1` keeps the modal), an empty/`?`/
+  non-string query and `?selftest=1` are a clean no-op, an unknown id is
+  returned verbatim, a real library id round-trips, purity + determinism
+  (proven with a poisoned `document`, no input mutation), composition +
+  order-independence, and tolerance of a trailing `#fragment`/`+`-space/
+  malformed `%xx`/bare key without throwing.
+- **Self-test extended** (`selftest.js`, now **46** checks): a live check that
+  `WT.deeplink.parse` exists and that `parse("?scenario=<real id>")` yields
+  that id with onboarding suppressed while `?selftest=1` stays a no-op.
+
+### Changed
+- **Offline PWA cache** bumped `wt-v35` → `wt-v36`; `deeplink.js` added to the
+  service-worker precache and loaded in `index.html` before `app.js`. Fully
+  offline; no new dependencies; no external references.
+
 ## [1.6.0] — 2026-08-03
 
 ### Added
