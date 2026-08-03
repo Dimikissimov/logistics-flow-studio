@@ -3461,6 +3461,8 @@
     });
     const empty = $("scenarioEmpty");
     if (empty) empty.hidden = any;
+    // Keep the A/B compare pickers in sync with saved scenarios (v1.2).
+    if (WT.compare && typeof refreshCompareSources === "function") refreshCompareSources();
   }
 
   function scenarioSaveCurrent() {
@@ -3563,6 +3565,210 @@
     $("scenarioImportBtn").addEventListener("click", () => $("scenarioImportInput").click());
     $("scenarioImportInput").addEventListener("change", (e) => { if (e.target.files[0]) scenarioImportBundle(e.target.files[0]); e.target.value = ""; });
     refreshScenarioList();
+  }
+
+  // ================================================================
+  // v1.2: SCENARIO A/B COMPARE (compare.js -> WT.compare)
+  // ----------------------------------------------------------------
+  // Pick TWO set-ups and see their key metrics side-by-side with honest
+  // deltas. Every per-side number is DERIVED FROM WT.report.build (the SAME
+  // consolidated report the app shows), so the two sides can never drift
+  // from the app. Sources resolve through the SAME builders the app uses
+  // (currentLayout / WT.examples.build / WT.scenarios.load); metrics are
+  // computed on those resolved SNAPSHOTS, never by loading them onto the
+  // floor - so the user's current on-screen layout is left untouched.
+  // ================================================================
+  let compareSourceIndex = {}; // "kind:id" -> source descriptor
+
+  // The current layout as a self-contained snapshot (WITH the live config),
+  // so "Current layout" is compared exactly as configured on screen.
+  function currentCompareSnapshot() {
+    readConfigFromUI();
+    return {
+      version: "wt-1", gridW: GRID_W, gridH: GRID_H, cell: CELL_M,
+      elements: state.elements.map((e) => ({ id: e.id, type: e.type, x: e.x, y: e.y, w: e.w, d: e.d })),
+      config: Object.assign({}, state.config),
+    };
+  }
+
+  function compareCtx() {
+    return { current: currentCompareSnapshot(), examples: WT.examples, scenarios: WT.scenarios };
+  }
+
+  // Options handed to WT.compare (both sides get the SAME opts, so the
+  // comparison is fair): a header stamp (body stays byte-stable), plus the
+  // user's imported SKU/order data when loaded so both layouts run against
+  // the same demand (honestly labelled "yours"). The timestamp affects only
+  // the report header - never the compared metrics - so the table is stable.
+  function compareOpts() {
+    const opts = { timestamp: new Date().toISOString() };
+    if (WT.wmsdata && WT.wmsdata.isLoaded && WT.wmsdata.isLoaded()) {
+      opts.skuMaster = WT.wmsdata.skuMaster;
+      opts.orderPool = WT.wmsdata.orderPool;
+    }
+    return opts;
+  }
+
+  function populateCompareSelect(sel, srcs, preferKind) {
+    if (!sel) return;
+    sel.innerHTML = "";
+    const groups = {};
+    const order = [];
+    srcs.forEach((s) => {
+      if (!groups[s.group]) { groups[s.group] = []; order.push(s.group); }
+      groups[s.group].push(s);
+    });
+    order.forEach((g) => {
+      const og = document.createElement("optgroup");
+      og.label = g;
+      groups[g].forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s.kind + ":" + s.id;
+        let text = s.name;
+        if (s.kind === "example" && s.industry) text += " (" + s.industry + ")";
+        if (s.kind === "saved" && s.summary && s.summary.floor) text += " — " + s.summary.floor + " m";
+        opt.textContent = text;
+        if (!s.available) { opt.disabled = true; opt.textContent += " (unavailable)"; }
+        og.appendChild(opt);
+      });
+      sel.appendChild(og);
+    });
+    if (preferKind) {
+      const match = srcs.find((s) => s.kind === preferKind && s.available);
+      if (match) sel.value = match.kind + ":" + match.id;
+    }
+  }
+
+  function refreshCompareSources() {
+    if (!WT.compare || !$("compareA")) return;
+    const srcs = WT.compare.sources(compareCtx());
+    compareSourceIndex = {};
+    srcs.forEach((s) => { compareSourceIndex[s.kind + ":" + s.id] = s; });
+    const aPrev = $("compareA").value;
+    const bPrev = $("compareB").value;
+    // Default A = current layout, B = the first example scenario.
+    populateCompareSelect($("compareA"), srcs, "current");
+    populateCompareSelect($("compareB"), srcs, "example");
+    // Preserve a still-valid prior choice.
+    if (aPrev && compareSourceIndex[aPrev]) $("compareA").value = aPrev;
+    if (bPrev && compareSourceIndex[bPrev]) $("compareB").value = bPrev;
+  }
+
+  function runScenarioCompare() {
+    if (!WT.compare) { toast("Compare needs compare.js.", "warn"); return; }
+    const aKey = $("compareA") ? $("compareA").value : "";
+    const bKey = $("compareB") ? $("compareB").value : "";
+    const aSrc = compareSourceIndex[aKey];
+    const bSrc = compareSourceIndex[bKey];
+    if (!aSrc || !bSrc) { toast("Pick a source for both A and B.", "warn"); return; }
+    const ctx = compareCtx();
+    const aLayout = WT.compare.resolve(aSrc, ctx);
+    const bLayout = WT.compare.resolve(bSrc, ctx);
+    if (!aLayout || !Array.isArray(aLayout.elements) || !aLayout.elements.length) {
+      toast('Side A (' + aSrc.name + ') has no elements to compare.', "warn"); return;
+    }
+    if (!bLayout || !Array.isArray(bLayout.elements) || !bLayout.elements.length) {
+      toast('Side B (' + bSrc.name + ') has no elements to compare.', "warn"); return;
+    }
+    let result;
+    try {
+      // Metrics are computed on these resolved snapshots ONLY - the floor
+      // is never re-loaded, so the current on-screen layout is untouched.
+      result = WT.compare.compare(aLayout, bLayout, compareOpts());
+    } catch (err) { toast("Compare failed: " + err.message, "err"); return; }
+    renderCompare(result, aSrc, bSrc);
+    openCompareModal();
+    status("Compared A vs B — both sides derived from the same WMS Report modules (can't drift). SYNTHETIC unless you imported data; better/worse shown only where the direction is unambiguous.");
+  }
+
+  function cmpFmt(v, unit) {
+    if (v === null || v === undefined || (typeof v === "number" && !isFinite(v))) return '<span class="cmp-na">n/a</span>';
+    let n = Number(v);
+    const r = Math.round(n * 10) / 10;
+    return esc(String(r)) + (unit ? ' <span class="cmp-unit">' + esc(unit) + "</span>" : "");
+  }
+  function cmpDirArrow(dir) {
+    if (dir === "higher") return '<span class="cmp-dir" title="higher is better">↑ better</span>';
+    if (dir === "lower") return '<span class="cmp-dir" title="lower is better">↓ better</span>';
+    return '<span class="cmp-dir" title="direction is ambiguous — not scored">~ neutral</span>';
+  }
+
+  function renderCompare(result, aSrc, bSrc) {
+    const body = $("compareBody");
+    if (!body) return;
+    const a = result.a, b = result.b;
+    const secTitle = {};
+    result.sections.forEach((s) => { secTitle[s.key] = s.title; });
+
+    let html = "";
+    // Which set-up each side is + its data mode.
+    html += '<div class="cmp-heads">';
+    html += '<div class="cmp-side"><strong>A:</strong> ' + esc(aSrc.name) + ' <span class="cmp-pill">' + esc(a.dataMode || "synthetic") + "</span></div>";
+    html += '<div class="cmp-side"><strong>B:</strong> ' + esc(bSrc.name) + ' <span class="cmp-pill">' + esc(b.dataMode || "synthetic") + "</span></div>";
+    html += "</div>";
+
+    // Plain-language "what changed".
+    html += '<div class="cmp-summary"><h3>' + esc(result.summary.headline) + "</h3>";
+    if (result.summary.points.length) {
+      html += "<ul>";
+      result.summary.points.forEach((p) => { html += "<li>" + esc(p) + "</li>"; });
+      html += "</ul>";
+    }
+    if (result.summary.notes.length) {
+      html += '<ul class="cmp-notes">';
+      result.summary.notes.forEach((n) => { html += "<li>" + esc(n) + "</li>"; });
+      html += "</ul>";
+    }
+    html += "</div>";
+
+    // The side-by-side table, grouped by section.
+    html += '<div class="cmp-scroll"><table class="cmp-table">';
+    html += "<thead><tr><th>Metric</th><th>A</th><th>B</th><th>Δ (B−A)</th><th>Δ %</th></tr></thead><tbody>";
+    let lastSec = null;
+    result.deltas.forEach((d) => {
+      if (d.section !== lastSec) {
+        html += '<tr class="cmp-sec"><td colspan="5">' + esc(secTitle[d.section] || d.section) + "</td></tr>";
+        lastSec = d.section;
+      }
+      // Delta colouring: green when B is the better side, red when worse,
+      // muted when neutral / tied / unavailable. NEVER colour a neutral row.
+      let cls = "cmp-neu";
+      if (d.better === "b") cls = "cmp-good";
+      else if (d.better === "a") cls = "cmp-bad";
+      const neutralPill = d.dir === "neutral" ? '<span class="cmp-pill">neutral</span>' : "";
+      let absTxt, pctTxt;
+      if (!d.available) { absTxt = '<span class="cmp-na">n/a</span>'; pctTxt = '<span class="cmp-na">n/a</span>'; cls = "cmp-na"; }
+      else {
+        const sign = d.absolute > 0 ? "+" : "";
+        absTxt = sign + esc(String(d.absolute));
+        pctTxt = d.pct === null ? '<span class="cmp-na">—</span>' : (d.pct > 0 ? "+" : "") + esc(String(d.pct)) + "%";
+      }
+      html += "<tr>";
+      html += '<td class="cmp-metric">' + esc(d.label) + ' <span class="cmp-unit">' + esc(d.unit) + "</span>" + cmpDirArrow(d.dir) + neutralPill + "</td>";
+      html += "<td>" + cmpFmt(d.a) + "</td>";
+      html += "<td>" + cmpFmt(d.b) + "</td>";
+      html += '<td class="cmp-delta ' + cls + '">' + absTxt + "</td>";
+      html += '<td class="cmp-delta ' + cls + '">' + pctTxt + "</td>";
+      html += "</tr>";
+    });
+    html += "</tbody></table></div>";
+
+    // Honesty line.
+    html += '<p class="cmp-honesty" style="margin-top:10px">' + esc(result.honesty) + "</p>";
+    body.innerHTML = html;
+  }
+
+  function openCompareModal() { if ($("compareModal")) $("compareModal").hidden = false; }
+  function closeCompareModal() { if ($("compareModal")) $("compareModal").hidden = true; }
+
+  function wireCompare() {
+    if (!$("compareRunBtn")) return;
+    refreshCompareSources();
+    $("compareRunBtn").addEventListener("click", runScenarioCompare);
+    if ($("compareClose")) $("compareClose").addEventListener("click", closeCompareModal);
+    if ($("compareModal")) {
+      $("compareModal").addEventListener("click", (e) => { if (e.target === $("compareModal")) closeCompareModal(); });
+    }
   }
 
   // ---- Shareable layout links (the URL fragment IS the data) -------
@@ -5119,6 +5325,8 @@
     $("importInput").addEventListener("change", (e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; });
     // v1.1: the user's OWN saved scenarios (scenarios.js -> WT.scenarios).
     if (WT.scenarios) wireScenarios();
+    // v1.2: Scenario A/B compare (compare.js -> WT.compare).
+    if (WT.compare) wireCompare();
     $("clearBtn").addEventListener("click", () => {
       if (!state.elements.length) return;
       state.elements = [];

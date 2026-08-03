@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v30"; // v1.1 usability: save/load NAMED scenarios (scenarios.js -> WT.scenarios, a pure/guarded on-device store; app.js adds a compact "My scenarios" control that saves the current serialize() snapshot under a name and loads it back through the SAME deserialize() loader as JSON import; export/import a JSON backup bundle). New verify_scenarios.js harness (scenarios/app/index/sw changed)
+const CACHE_VERSION = "wt-v31"; // v1.2 usability: Scenario A/B compare (compare.js -> WT.compare, a pure/deterministic compare whose per-side metrics are DERIVED FROM WT.report.build so they can't drift from the app; app.js adds a "Compare A/B" panel + side-by-side delta modal that resolves sources through the SAME builders — currentLayout / examples.build / scenarios.load — and computes on the snapshots WITHOUT disturbing the floor). New verify_compare.js harness (compare/app/index/styles/sw changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -39,6 +39,7 @@ const APP_SHELL = [
   "./demo.js",
   "./cards.js",
   "./scenarios.js",
+  "./compare.js",
   "./app.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",

@@ -207,6 +207,28 @@
         <input id="scenarioImportInput" type="file" accept="application/json,.json" hidden />
       </section>
 
+      <!-- v1.2: Scenario A/B compare — pick TWO set-ups (the current
+           layout, a built-in example or one of your saved scenarios) and
+           see their key metrics side-by-side with honest deltas, so you can
+           answer "which layout/strategy is better?". Every per-side number
+           is pulled from the SAME consolidated WMS Report the app shows
+           (compare.js -> WT.compare, derived from WT.report.build), so the
+           two sides can never drift from the app. Comparing runs on the
+           picked snapshots and never disturbs the current floor. -->
+      <section class="card" id="compareCard">
+        <h2 class="card-title">Scenario A/B compare</h2>
+        <p class="hint">Pick <strong>two whole set-ups</strong> — the current layout, a built-in example, or one of your saved scenarios — and see their key metrics <strong>side-by-side with deltas</strong>. Answers "which layout / strategy is better?". Broader than the strategy-only <em>Compare A/B</em> above: this diffs the <strong>full consolidated report</strong> (compliance, WMS KPIs, storage, automation, capacity). Each side's numbers come from the <strong>same WMS Report</strong> the app shows (they can't drift). <strong>SYNTHETIC</strong> unless you imported data — a transparent heuristic informed by ISO/DIN/EN/VDI, <strong>not a certification, not measured</strong>. "Better/worse" is shown only where the direction is unambiguous; capacity/utilisation/automation stay neutral. Comparing runs on the picked snapshots and <strong>doesn't disturb your current floor</strong>.</p>
+        <div class="field">
+          <label for="compareA">Scenario A</label>
+          <select id="compareA" aria-label="Scenario A source"></select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label for="compareB">Scenario B</label>
+          <select id="compareB" aria-label="Scenario B source"></select>
+        </div>
+        <button id="compareRunBtn" class="btn primary wide" type="button" style="margin-top:10px" title="Compute both set-ups' metrics from the same WMS Report modules and show them side-by-side with deltas — offline, nothing uploaded, current floor untouched">Compare A vs B</button>
+      </section>
+
       <!-- W3: bring your own data (CSV import). Full-tier feature: the
            demo shows it locked with the padlock + unlock hint (never
            hidden). Parsing runs in the browser via FileReader - the
@@ -682,6 +704,20 @@
     </div>
   </div>
 
+  <!-- v1.2: Scenario A/B compare result. Body is rendered by app.js from
+       WT.compare.compare(a, b) — a side-by-side metric table with deltas
+       coloured better/worse only where the direction is unambiguous. -->
+  <div id="compareModal" class="overlay" hidden>
+    <div class="overlay-card overlay-card--wide" role="dialog" aria-modal="true" aria-labelledby="compareTitle">
+      <h2 id="compareTitle">Scenario A/B compare</h2>
+      <div id="compareBody"><!-- filled by app.js renderCompare() --></div>
+      <div class="ob-actions">
+        <label class="cmp-legend" aria-hidden="true"><span class="cmp-swatch cmp-good"></span> better&nbsp;&nbsp;<span class="cmp-swatch cmp-bad"></span> worse&nbsp;&nbsp;<span class="cmp-swatch cmp-neu"></span> neutral (higher isn't always better)</label>
+        <button id="compareClose" class="btn primary" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom tooltip + toast -->
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
@@ -717,6 +753,7 @@
   <script src="demo.js"></script>
   <script src="cards.js"></script>
   <script src="scenarios.js"></script>
+  <script src="compare.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

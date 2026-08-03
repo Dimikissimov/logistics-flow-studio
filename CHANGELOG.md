@@ -6,6 +6,39 @@ seeded teaching heuristic unless you import your own data** — informed by publ
 standards (ISO 22400, DIN 15185, ASR, EN, VDI), not a certification and not a
 measurement of a real site.
 
+## [1.2.0] — 2026-08-03
+
+### Added
+- **Scenario A/B compare.** A new **"Scenario A/B compare"** panel lets you pick
+  **two whole set-ups** — the current layout, a built-in example, or one of your
+  saved scenarios — and see their key metrics **side-by-side with deltas** in a
+  modal, so you can answer *"which layout / strategy is better?"*. Each side's
+  numbers are **derived from the same consolidated WMS Report the app shows**
+  (`WT.report.build`), which is itself cross-consistent with the WMS, storage,
+  automation and compliance modules — so the two sides **can never drift** from
+  the app. The table diffs layout capacity/floor-use, WMS operations KPIs
+  (throughput, order cycle time, dock-to-stock, picking), storage
+  occupancy/placement/A-class pick travel, automation throughput and compliance
+  pass/warn/fail, with each delta given as an **absolute and % change (B-vs-A)**.
+  A plain-language *"what changed"* summary calls out which side has higher
+  throughput, lower pick travel and better compliance. **"Better/worse" colouring
+  is shown only where the direction is unambiguous** (lower pick travel = better);
+  capacity, utilisation and automation are left **neutral** with an honest
+  *"higher isn't always better"* note (more automation ≠ automatically better).
+  Comparing runs on the picked snapshots and **never disturbs your current
+  floor**. Sources resolve through the **same builders the app uses**
+  (`currentLayout` / `WT.examples.build` / `WT.scenarios.load`). The pure,
+  deterministic engine lives in `compare.js` (`WT.compare`), covered by the new
+  `verify_compare.js` harness (16 checks). This is broader than, and separate
+  from, the existing strategy-only *Compare A/B* predictor. **SYNTHETIC** unless
+  you imported your own data — a transparent heuristic informed by ISO/DIN/EN/VDI,
+  **not a certification, not measured**.
+
+### Engineering
+- 25 headless verification harnesses via `node test/run-all.mjs` (the new
+  `verify_compare.js` added). Service-worker cache bumped to `wt-v31`
+  (precaching `compare.js`).
+
 ## [1.1.0] — 2026-08-03
 
 ### Added

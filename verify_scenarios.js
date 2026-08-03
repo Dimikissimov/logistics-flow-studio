@@ -38,7 +38,7 @@
  *
  *  13.  index.html loads scenarios.js before app.js and ships the "My
  *       scenarios" control with the on-device honesty label.
- *  14.  sw.js precaches ./scenarios.js (offline shell complete) at wt-v30.
+ *  14.  sw.js precaches ./scenarios.js (offline shell complete) at a versioned cache.
  *  15.  app.js wires scenarios via WT.scenarios AND reuses deserialize()
  *       (the same loader as JSON import), not a bespoke apply path.
  *
@@ -308,8 +308,8 @@ check(
 );
 
 check(
-  "sw.js precaches ./scenarios.js (offline shell complete) and is bumped to wt-v30",
-  swJs.indexOf('"./scenarios.js"') !== -1 && swJs.indexOf("wt-v30") !== -1
+  "sw.js precaches ./scenarios.js (offline shell complete) and carries a versioned cache",
+  swJs.indexOf('"./scenarios.js"') !== -1 && /wt-v\d+/.test(swJs)
 );
 
 check(

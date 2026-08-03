@@ -189,10 +189,27 @@
  *      stable), and honest validation (malformed bundles rejected without
  *      mutating the store, junk entries skipped, save() rejecting bad input).
  *      Plus shipped-source guards: index.html loads scenarios.js before app.js
- *      with the on-device honesty label, sw.js precaches it at wt-v30, and
+ *      with the on-device honesty label, sw.js precaches it at a versioned cache, and
  *      app.js loads a scenario through the SAME deserialize() as JSON import.
  *      The DOM control is added by app.js and not headless-testable; the pure
  *      store + shipped-source guarantees behind it are covered here.
+ *  25. verify_compare.js  - Scenario A/B compare (v1.2): WT.compare picks
+ *      TWO set-ups and shows their key metrics side-by-side with honest
+ *      deltas. Asserts each side is DERIVED FROM WT.report.build (the
+ *      metricsFor result CARRIES the report verbatim, deep-equal) and its
+ *      byKey values CROSS-CONSISTENTLY EQUAL WT.wms.kpis / WT.storage.stats
+ *      / WT.automation.report / WT.compliance.check for the same layout +
+ *      config - so a compared side can never drift from the app; deltas are
+ *      correct B-A + % arithmetic; determinism (same layouts + timestamp ->
+ *      identical bytes; deltas timestamp-independent); a layout vs ITSELF ->
+ *      all-zero deltas; runs across an examples layout vs a generated one;
+ *      sources() lists current + examples + saved (current honestly marked
+ *      unavailable when absent); resolve() rebuilds each via the SAME
+ *      builders; better/worse applied ONLY to unambiguous metrics (neutral -
+ *      capacity/utilisation/automation - never scored); and the SYNTHETIC /
+ *      NOT measured / NOT a certification / ISO-DIN-VDI honesty is restated.
+ *      The DOM panel/modal are added by app.js and not headless-testable;
+ *      the pure compare + cross-consistency behind them are covered here.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -227,6 +244,7 @@ const HARNESSES = [
   { name: "Guided demo plan + About copy (verify_demo.js)", args: ["verify_demo.js"] },
   { name: "Collapsible side-panel cards (verify_ui.js)", args: ["verify_ui.js"] },
   { name: "Save / load named scenarios (verify_scenarios.js)", args: ["verify_scenarios.js"] },
+  { name: "Scenario A/B compare (verify_compare.js)", args: ["verify_compare.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
