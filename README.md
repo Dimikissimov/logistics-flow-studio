@@ -84,7 +84,24 @@ Every documented behaviour is backed by a headless harness (no stubs). Run them 
 node test/run-all.mjs
 ```
 
-**27 harnesses** cover the simulation baselines, the share-link codec, CSV import, IFC export, the Compliance Check, the generator, the example library, the WMS/automation/flow/KPI/storage/report layers, the standards knowledge base, the guided-demo plan, the collapsible-cards helper, the saved-scenarios store, the Scenario A/B compare (with cross-consistency assertions proving a compared side equals the report/WMS/storage/automation/compliance modules), the live order pool (determinism, count conservation, the cap + honest overflow, the starving/saturating flags and the selection-rate tie to the WMS/flow throughput), the per-type 2D + 3D shape registry (a mock-context smoke test drawing every object type in both 2D and 3D, in light and dark, at small and large scale, asserting no non-finite coordinate and no throw — the practical way to verify a pure-draw feature that can't be pixel-tested headlessly — plus exact domain-type coverage and the height-driven 3D forms), and an offline guard that asserts the app references no external assets. Everything is deterministic and ASCII-only; exit code 0 means all green.
+**28 harnesses** cover the simulation baselines, the share-link codec, CSV import, IFC export, the Compliance Check, the generator, the example library, the WMS/automation/flow/KPI/storage/report layers, the standards knowledge base, the guided-demo plan, the collapsible-cards helper, the saved-scenarios store, the Scenario A/B compare (with cross-consistency assertions proving a compared side equals the report/WMS/storage/automation/compliance modules), the live order pool (determinism, count conservation, the cap + honest overflow, the starving/saturating flags and the selection-rate tie to the WMS/flow throughput), the per-type 2D + 3D shape registry (a mock-context smoke test drawing every object type in both 2D and 3D, in light and dark, at small and large scale, asserting no non-finite coordinate and no throw — the practical way to verify a pure-draw feature that can't be pixel-tested headlessly — plus exact domain-type coverage and the height-driven 3D forms), the production hardening (the global error boundary installs and records without swallowing, the strict offline Content-Security-Policy meta is present with no `unsafe-eval`, no `eval(`/inline handlers anywhere, and the in-browser self-test is inert without its flag yet carries ≥ 25 wiring assertions), and an offline guard that asserts the app references no external assets. Everything is deterministic and ASCII-only; exit code 0 means all green.
+
+### In-browser self-test
+
+The 28 harnesses above cover the **pure logic** in Node. The **DOM/UI** is covered by a **real in-browser end-to-end self-test** that drives the live app through the same handlers the UI uses. Serve the app over `http(s)`/localhost, then open:
+
+```
+index.html?selftest=1
+```
+
+After boot it runs ~40 checks against the live app (every `WT.*` module present and correctly shaped, a clean error-free boot, the key panels/buttons in the DOM, loading an example, running WMS ops, stepping/playing the flow, the 2.5D toggle being a layout no-op, building the report, opening About/KB, the zoom controls) and writes a machine-readable line into the `#wt-selftest` element and the console:
+
+```
+WT-SELFTEST: PASS 40/40
+WT-SELFTEST: FAIL 38/40 :: <failed check names>
+```
+
+A normal load (no flag) is completely unaffected — the self-test code is inert. This verifies **wiring and a no-uncaught-error boot**, not visual/pixel correctness. See [`docs/PRODUCTION.md`](docs/PRODUCTION.md).
 
 ## Licence
 

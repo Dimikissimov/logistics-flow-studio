@@ -246,6 +246,22 @@
  *      throw), and the illustrative / NOT CAD / NOT BIM / no-brands honesty
  *      labels are present. The live pixels are verified in the browser; every
  *      draw PATH is covered here.
+ *  28. verify_hardening.js - Production hardening (v1.5): the GLOBAL ERROR
+ *      BOUNDARY (errors.js) actually installs window.onerror + window.on-
+ *      unhandledrejection under a window-shim, initialises window.__WT_ERRORS__,
+ *      records an error/rejection and does NOT swallow (onerror returns false);
+ *      index.html loads it FIRST (in <head>, before view.js + app.js) and
+ *      loads selftest.js LAST; a strict offline Content-Security-Policy <meta>
+ *      is present with the expected directives, NO 'unsafe-eval' and NO
+ *      'unsafe-inline' in script-src; a static scan confirms NO eval(/new
+ *      Function( in any app script and NO inline on*= handlers in index.html
+ *      (so the CSP breaks nothing); selftest.js is INERT without ?selftest=1
+ *      (guards on location.search + early return) and carries >= 25 assertions,
+ *      emitting the machine-readable `WT-SELFTEST: PASS n/n` into #wt-selftest
+ *      + the console; app.js exposes window.__WT_TEST_API__ ONLY under the
+ *      flag; and sw.js precaches errors.js + selftest.js at the bumped wt-v34
+ *      cache. The LIVE self-test runs in a real browser (headless); this
+ *      harness verifies its presence + wiring headlessly.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -283,6 +299,7 @@ const HARNESSES = [
   { name: "Scenario A/B compare (verify_compare.js)", args: ["verify_compare.js"] },
   { name: "Live order pool (verify_orderpool.js)", args: ["verify_orderpool.js"] },
   { name: "Per-type 2D+3D shape registry (verify_shapes.js)", args: ["verify_shapes.js"] },
+  { name: "Production hardening: error boundary + self-test + CSP (verify_hardening.js)", args: ["verify_hardening.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

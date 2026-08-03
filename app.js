@@ -5599,6 +5599,36 @@
     });
   }
 
+  // In-browser self-test hook. ATTACHED ONLY under ?selftest=1 - a normal
+  // load never exposes these internals. selftest.js drives the LIVE app
+  // through the SAME functions the UI uses (no re-implementation), so the
+  // self-test exercises the real handlers, not a parallel copy.
+  function maybeExposeTestApi() {
+    if (!/[?&]selftest=1(?:&|$)/.test(window.location.search)) return;
+    window.__WT_TEST_API__ = {
+      // state + viewport (read-only inspection by the suite)
+      state: state,
+      view: view,
+      currentLayout: currentLayout,
+      // the real UI handlers
+      loadExample: loadExample,
+      runWmsOps: runWmsOps,
+      flowPlay: flowPlay,
+      flowPause: flowPause,
+      flowStep: flowStep,
+      flowReset: flowReset,
+      drawFlowKpis: drawFlowKpis,
+      render: render,
+      setViewMode: setViewMode,
+      toggleViewMode: toggleViewMode,
+      buildCurrentReport: buildCurrentReport,
+      openAbout: openAbout,
+      closeAbout: closeAbout,
+      zoomAt: zoomAt,
+      fitToFloor: fitToFloor,
+    };
+  }
+
   function boot() {
     buildPalette();
     buildConfigControls();
@@ -5631,6 +5661,7 @@
     maybeShowOnboard();
     initInstallButton();
     registerSW();
+    maybeExposeTestApi(); // ?selftest=1 only: expose the real handlers to selftest.js
 
     // responsive + theme
     window.addEventListener("resize", () => { resizeCanvas(); drawFlowKpis(); });

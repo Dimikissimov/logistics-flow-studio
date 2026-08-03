@@ -6,6 +6,54 @@ seeded teaching heuristic unless you import your own data** — informed by publ
 standards (ISO 22400, DIN 15185, ASR, EN, VDI), not a certification and not a
 measurement of a real site.
 
+## [1.5.0] — 2026-08-03
+
+### Added
+- **Production hardening: in-browser self-test, global error boundary, and a
+  strict Content-Security-Policy.** The app's DOM/UI had only ever been tested
+  indirectly (the harnesses cover pure logic); this pass closes that gap with a
+  real in-browser end-to-end self-test plus two safety nets — none of which
+  change a normal load.
+  - **Global error boundary** (`errors.js`, loaded **first**, before every other
+    script). It installs `window.onerror` + `window.onunhandledrejection`,
+    records every uncaught error / unhandled rejection into
+    `window.__WT_ERRORS__`, and surfaces **one honest, non-blocking banner**
+    — *"Something went wrong — details in console."* — instead of leaving a
+    silently dead UI. It never **swallows** an error: the handlers do not return
+    `true` / `preventDefault()`, so the browser's own console reporting stays
+    intact. Tiny, dependency-free, CSP-safe.
+  - **In-browser self-test** (`selftest.js`, `?selftest=1`). **Inert** by default
+    — a normal load never runs it. When enabled it waits for boot, then drives
+    the **live app** through the same functions the UI uses (exposed as
+    `window.__WT_TEST_API__` only in self-test mode) and asserts ~40 checks:
+    every `WT.*` module present and correctly shaped, a clean error-free boot,
+    the key panels/buttons in the DOM, a real example load placing elements and
+    redrawing, WMS ops populating its panel, the flow stepping/playing then
+    stopping, the 2.5D toggle being a pure layout no-op, the report building with
+    its expected sections, About/KB opening, and the zoom controls running. It
+    writes a **machine-readable** result into a `#wt-selftest` element and the
+    console — `WT-SELFTEST: PASS 40/40` or `WT-SELFTEST: FAIL n/40 :: <checks>`
+    — for a maintainer to read headlessly. Each check is isolated (a thrown
+    check is one FAIL, never a dead page) and the suite restores the app to a
+    normal state at the end.
+  - **Strict offline Content-Security-Policy** (`<meta>` in `index.html`):
+    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:; connect-src 'self'; worker-src 'self';
+    manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none';
+    frame-src 'none'`. No external hosts, **no `unsafe-eval`**, no inline scripts;
+    inline **style** is allowed because the UI uses a handful of `style=""`
+    attributes. A static scan confirms there is no `eval(` / `new Function(` and
+    no inline `on*=` handler anywhere, so the policy breaks nothing. This is
+    **best-practice hardening for an offline app, not a security certification**.
+- **New harness** `verify_hardening.js` (28th) verifies all of the above
+  headlessly (the error boundary actually installs + records + does not swallow
+  under a window-shim; the CSP directives; the eval/inline-handler scan; the
+  self-test's inertness, ≥ 25 assertions and machine-readable output; the
+  guarded test API; the service-worker precache + cache bump). The **live**
+  self-test runs in a real browser; the harness gates its presence and wiring.
+- Service-worker cache bumped **`wt-v33` → `wt-v34`**; `errors.js` + `selftest.js`
+  added to the offline precache shell.
+
 ## [1.4.0] — 2026-08-03
 
 ### Added

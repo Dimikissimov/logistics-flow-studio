@@ -2,6 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <!-- Security hardening: a strict Content-Security-Policy for a fully
+       OFFLINE app. No external hosts, no eval, no inline scripts. Inline
+       STYLE is allowed ('unsafe-inline') because the UI uses a handful of
+       inline style="" attributes and JS-driven element styles; scripts are
+       'self' only (every script is a local file). data:/blob: images cover
+       the underlay-image (FileReader dataURL) + blob previews. The service
+       worker + web manifest are same-origin ('self'). Best-practice
+       hardening for an offline app - not a security certification.
+       NOTE: serve over http(s)/localhost (the normal PWA deployment) so
+       'self' resolves correctly and the service worker can register. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'" />
+  <!-- Global error boundary (errors.js) - loaded FIRST, before any other
+       script, so it is installed before app code runs. Records uncaught
+       errors + unhandled rejections into window.__WT_ERRORS__ and surfaces a
+       non-blocking honest banner instead of a silently dead UI. -->
+  <script src="errors.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Logistics Flow Studio — WarehouseTwin</title>
   <meta name="description" content="A game-like, intuitive warehouse digital-twin simulator. Offline, installable PWA. Synthetic data, original assets." />
@@ -742,6 +759,11 @@
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 
+  <!-- Machine-readable in-browser self-test readout (see selftest.js). Empty
+       and hidden on a normal load; filled with `WT-SELFTEST: PASS n/n` (or a
+       FAIL line naming the failed checks) only under ?selftest=1. -->
+  <div id="wt-selftest" hidden></div>
+
   <!-- Local scripts only. Load order: domain -> tiers -> sim -> optimizer -> advisor -> compliance -> share -> ifc -> data -> wms -> app.
        (advisor uses the optimizer; both use domain + sim; compliance uses
         the shared aisle/guideline logic in domain.js; the WMS operations
@@ -777,5 +799,8 @@
   <script src="compare.js"></script>
   <script src="orderpool.js"></script>
   <script src="app.js"></script>
+  <!-- In-browser E2E self-test. INERT unless the URL carries ?selftest=1;
+       a normal load never runs it. Loaded LAST so the app has booted. -->
+  <script src="selftest.js"></script>
 </body>
 </html>

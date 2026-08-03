@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v33"; // v1.4: Distinct 2D + 3D object representations (shapes.js -> WT.shapes, the SINGLE per-type shape registry: has/draw2D/draw3D/ICONS/meta). Every warehouse object type now has a distinct, recognizable top-down GLYPH (shelf-bay grids, depth/flow chevrons, cantilever arms, AS/RS crane-aisle hatch, shuttle channels, mezzanine platform, dock notches, conveyor rollers, station benches, RGV/AGV vehicles, block-stack pattern) AND a distinct ISOMETRIC form (open see-through rack frames, tall crane tower, raised deck on legs, low belt bed, bench furniture, floor vehicles, stacked cubes) - reused by BOTH renderers (app.js draw2D + iso.js draw3D route through WT.shapes, fallback-safe to the old rect/box). LOD path keeps large layouts fast + legible at any zoom; iso forms reuse the domain heightM (single source of truth with the IFC export). Illustrative schematic, NOT CAD/BIM. New verify_shapes.js harness (shapes/app/iso/index/sw changed)
+const CACHE_VERSION = "wt-v34"; // v1.5: Production hardening - global error boundary (errors.js), in-browser E2E self-test (selftest.js, ?selftest=1), and a strict offline Content-Security-Policy meta in index.html. errors.js loads first (before all app scripts) and records uncaught errors/rejections into window.__WT_ERRORS__ + surfaces a non-blocking honest banner; selftest.js is INERT without the flag and, when enabled, drives the LIVE app through the same handlers the UI uses (exposed as window.__WT_TEST_API__ in self-test mode) writing a machine-readable `WT-SELFTEST: PASS n/n` into #wt-selftest. New verify_hardening.js harness (28th). Previously wt-v33: Distinct 2D + 3D object representations (shapes.js -> WT.shapes, the SINGLE per-type shape registry: has/draw2D/draw3D/ICONS/meta). Every warehouse object type now has a distinct, recognizable top-down GLYPH (shelf-bay grids, depth/flow chevrons, cantilever arms, AS/RS crane-aisle hatch, shuttle channels, mezzanine platform, dock notches, conveyor rollers, station benches, RGV/AGV vehicles, block-stack pattern) AND a distinct ISOMETRIC form (open see-through rack frames, tall crane tower, raised deck on legs, low belt bed, bench furniture, floor vehicles, stacked cubes) - reused by BOTH renderers (app.js draw2D + iso.js draw3D route through WT.shapes, fallback-safe to the old rect/box). LOD path keeps large layouts fast + legible at any zoom; iso forms reuse the domain heightM (single source of truth with the IFC export). Illustrative schematic, NOT CAD/BIM. New verify_shapes.js harness (shapes/app/iso/index/sw changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
+  "./errors.js",
   "./view.js",
   "./domain.js",
   "./knowledge.js",
@@ -43,6 +44,7 @@ const APP_SHELL = [
   "./compare.js",
   "./orderpool.js",
   "./app.js",
+  "./selftest.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",
   "./lsp/lsp-styles.css",
