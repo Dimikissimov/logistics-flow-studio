@@ -66,7 +66,7 @@
            calling the SAME functions the manual controls call (load a
            synthetic scenario → run WMS ops → play the flow → surface the
            live KPIs → offer the report). Interruptible; see app.js. -->
-      <button id="guidedDemoBtn" class="btn accent" type="button" title="Run a one-click guided tour of the whole app end-to-end on a synthetic example scenario (interruptible)">▶ Guided demo</button>
+      <button id="guidedDemoBtn" class="btn accent" type="button" aria-label="Run guided demo tour" title="Run a one-click guided tour of the whole app end-to-end on a synthetic example scenario (interruptible)">▶ Guided demo</button>
       <!-- P8: concise, honest "About / why this" panel -->
       <button id="aboutBtn" class="btn ghost" type="button" title="What WarehouseTwin is, what it does, and how it stays honest (offline, synthetic-unless-imported, not a certification)">About</button>
       <!-- P5: the network-level companion app (lsp/) -->
@@ -81,9 +81,9 @@
   </header>
 
   <!-- ================= MAIN LAYOUT ================= -->
-  <main class="layout">
+  <main class="layout" aria-label="Warehouse planner">
     <!-- LEFT: palette + layout actions -->
-    <aside class="col left">
+    <aside class="col left" aria-label="Building tools: palette, generator, examples, scenarios and data">
       <!-- AI Environment Generator: build a whole valid layout from a plant
            profile, then steer it with plain-language commands. Honest by
            design - a deterministic rule/heuristic engine + offline NL
@@ -351,7 +351,7 @@
     </aside>
 
     <!-- CENTER: canvas -->
-    <section class="col center">
+    <section class="col center" aria-label="Warehouse floor plan and view controls">
       <div class="canvas-toolbar">
         <span id="modeBadge" class="badge">Mode: Select</span>
         <span id="capBadge" class="badge muted">Positions: 0</span>
@@ -365,10 +365,10 @@
           <button id="zoomOutBtn" class="btn small icon" type="button" title="Zoom out (- key, or mouse wheel)" aria-label="Zoom out">&minus;</button>
           <span id="zoomBadge" class="badge muted" title="Current zoom level">100%</span>
           <button id="zoomInBtn" class="btn small icon" type="button" title="Zoom in (+ key, or mouse wheel)" aria-label="Zoom in">+</button>
-          <button id="zoomFitBtn" class="btn small" type="button" title="Fit the whole warehouse to the view (0 key)">Fit</button>
-          <button id="zoom100Btn" class="btn small" type="button" title="Reset to 100% (1:1)">100%</button>
-          <button id="panBtn" class="btn small" type="button" aria-pressed="false" title="Pan / hand mode: drag to move the view. Also works with middle-mouse drag, or hold Space and drag. Arrow keys pan when nothing is selected.">Pan</button>
-          <button id="isoBtn" class="btn small" type="button" aria-pressed="false" title="2.5D isometric view: an ILLUSTRATIVE 'plant-sim' style presentation where every element is drawn with height as an extruded iso block. Presentation/animation only — heights are illustrative defaults, editing is disabled. Composes with zoom, pan and Fit. Switch back for the accurate, editable top-down view.">2.5D view</button>
+          <button id="zoomFitBtn" class="btn small" type="button" aria-label="Fit warehouse to view" title="Fit the whole warehouse to the view (0 key)">Fit</button>
+          <button id="zoom100Btn" class="btn small" type="button" aria-label="Reset zoom to 100 percent" title="Reset to 100% (1:1)">100%</button>
+          <button id="panBtn" class="btn small" type="button" aria-pressed="false" aria-label="Pan / hand mode" title="Pan / hand mode: drag to move the view. Also works with middle-mouse drag, or hold Space and drag. Arrow keys pan when nothing is selected.">Pan</button>
+          <button id="isoBtn" class="btn small" type="button" aria-pressed="false" aria-label="Toggle 2.5D isometric view" title="2.5D isometric view: an ILLUSTRATIVE 'plant-sim' style presentation where every element is drawn with height as an extruded iso block. Presentation/animation only — heights are illustrative defaults, editing is disabled. Composes with zoom, pan and Fit. Switch back for the accurate, editable top-down view.">2.5D view</button>
         </div>
         <div class="floor-group" role="group" aria-label="Warehouse size in metres">
           <label for="floorWInput">Floor</label>
@@ -380,13 +380,18 @@
         </div>
       </div>
       <div class="canvas-wrap" id="canvasWrap">
-        <canvas id="floor" aria-label="Warehouse floor plan editor"></canvas>
+        <!-- v1.6 a11y: a <canvas> is opaque to assistive tech, so it carries an
+             aria-label AND points (aria-describedby) at an offscreen text
+             summary that app.js keeps current with the layout (element count,
+             floor size, view mode, sim status). -->
+        <canvas id="floor" aria-label="Warehouse floor plan editor" aria-describedby="floorDesc"></canvas>
+        <p id="floorDesc" class="sr-only">Warehouse floor plan. Loading…</p>
       </div>
       <p id="statusLine" class="status-line">Ready. Place racks &amp; docks, pick a strategy, then run the simulation.</p>
     </section>
 
     <!-- RIGHT: properties + simulation -->
-    <aside class="col right">
+    <aside class="col right" aria-label="Properties, simulation, WMS, automation, storage and live flow">
       <section class="card" id="propCard">
         <h2 class="card-title">Properties</h2>
         <div id="propPanel" class="prop-panel">
@@ -537,8 +542,8 @@
         </div>
         <p class="hint">Watch handling units (MUs) flow through the <strong>current layout</strong> along the spine <strong>receiving → storage → picking → packing → shipping</strong>, using dock, storage, pick-face and pack centroids (and a conveyor/RGV/AGV spine where present) as waypoints. More docks/automation → the bottleneck stage (via WMS) lifts, so units spawn faster and move quicker. Seed comes from the Simulation panel — same layout + seed → identical animation.</p>
         <div class="flow-controls" role="group" aria-label="Live material-flow playback">
-          <button id="flowPlayBtn" class="btn primary" type="button">▶ Play</button>
-          <button id="flowPauseBtn" class="btn" type="button">❚❚ Pause</button>
+          <button id="flowPlayBtn" class="btn primary" type="button" aria-label="Play material-flow animation">▶ Play</button>
+          <button id="flowPauseBtn" class="btn" type="button" aria-label="Pause material-flow animation">❚❚ Pause</button>
           <button id="flowStepBtn" class="btn" type="button">Step</button>
           <button id="flowResetBtn" class="btn" type="button">Reset</button>
         </div>

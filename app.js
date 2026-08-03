@@ -33,6 +33,22 @@
   const REF_COLS = V.FLOOR_DEFAULT_W;
   const REF_ROWS = V.FLOOR_DEFAULT_H;
 
+  // ---------------- Accessibility: reduced motion ----------------
+  // v1.6 a11y: honour the OS "reduce motion" setting. The live material-flow
+  // animation is a continuous requestAnimationFrame loop; when the user has
+  // asked for reduced motion we DO NOT auto-run it - Play shows a single
+  // static/stepped frame instead, and the app stays fully usable (Step /
+  // Reset still advance the model on demand). The matcher is cached so the
+  // per-frame guard never allocates. Defensive on environments without
+  // matchMedia (returns false -> normal behaviour).
+  const _reducedMotionMQ =
+    (typeof window.matchMedia === "function")
+      ? window.matchMedia("(prefers-reduced-motion: reduce)")
+      : null;
+  function prefersReducedMotion() {
+    return !!(_reducedMotionMQ && _reducedMotionMQ.matches);
+  }
+
   // ---------------- Mutable state ----------------
   const state = {
     elements: [], // {id, type, x, y, w, d}
@@ -333,8 +349,19 @@
     // once per frame (not per element) to keep the draw loop allocation-lean.
     const themeName = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
+    // v1.6 performance: cull the (expensive) glyph+label draw to the elements
+    // whose footprint actually overlaps the visible world rectangle. On a
+    // large floor zoomed in, this keeps per-frame work proportional to what
+    // is ON SCREEN, not the whole layout. Pure helper (WT.view.cullToView),
+    // computed once per frame; the +2 cell pad keeps edge labels intact.
+    // Fallback-safe: if the module/helper is absent, draw the full list.
+    const _vb = V.viewBounds(view, viewCssW, viewCssH);
+    const drawList = (V && typeof V.cullToView === "function")
+      ? V.cullToView(state.elements, _vb, 2)
+      : state.elements;
+
     // elements
-    for (const e of state.elements) {
+    for (const e of drawList) {
       const def = ELEMENTS[e.type];
       const px = e.x * cellPx, py = e.y * cellPx, pw = e.w * cellPx, ph = e.d * cellPx;
       ctx.save();
@@ -1150,6 +1177,9 @@
   // existing render() (no competing draw loop) and refresh the readout.
   function flowFrame() {
     if (!state.flow.playing) return;
+    // v1.6 a11y: if "reduce motion" turned on mid-play, stop the continuous
+    // loop and hold the current frame (never keep auto-animating under it).
+    if (prefersReducedMotion()) { flowStop(); updateFlowButtons(); return; }
     // If the layout changed mid-play (loaded an example, generated, resized,
     // edited an element), rebuild so the boxes track the current floor.
     if (!state.flow.sim || state.flow.sig !== flowSignature()) flowBuild();
@@ -1174,6 +1204,23 @@
     if (!WT.flowsim) { toast("Live material flow needs flowsim.js.", "warn"); return; }
     if (!flowEnsureFresh()) return;
     state.flow.on = true;
+    // v1.6 a11y: honour "reduce motion". Rather than auto-run the continuous
+    // rAF loop, advance ONE bucket and hold a static frame; the boxes are
+    // still shown and the app stays fully usable (Step / Reset advance on
+    // demand). This also governs the one-click Guided demo (it calls this).
+    if (prefersReducedMotion()) {
+      flowStop(); // ensure no loop is running
+      WT.flowsim.step(state.flow.sim, FLOW_STEP_TICKS);
+      stepOrderPool(FLOW_STEP_TICKS);
+      updateFlowButtons();
+      render();
+      updateFlowReadout();
+      updatePoolReadout();
+      sampleFlowKpis();
+      drawFlowKpis();
+      status("Reduced motion is on: showing a static material-flow frame. Use Step to advance, Reset to restart.");
+      return;
+    }
     if (state.flow.playing) return;
     state.flow.playing = true;
     updateFlowButtons();
@@ -1629,6 +1676,37 @@
       }
     }
     updateStandardsLive();
+    updateCanvasDescription(); // v1.6 a11y: keep the offscreen canvas summary current
+  }
+
+  // ================================================================
+  // v1.6 A11Y: offscreen canvas description.
+  // A <canvas> is opaque to assistive tech, so we maintain a concise text
+  // summary of WHAT IS ON THE FLOOR in a visually-hidden element that the
+  // canvas points at via aria-describedby (#floorDesc). It describes STABLE
+  // structure (element count, floor size, view mode, sim on/off) - not the
+  // per-tick counters - so it changes rarely; we only touch the DOM when the
+  // text actually changes, so it is cheap even when called every frame.
+  // ================================================================
+  let _canvasDescCache = "";
+  function updateCanvasDescription() {
+    const el = $("floorDesc");
+    if (!el) return;
+    const n = state.elements.length;
+    const mode = state.viewMode === "iso" ? "2.5D isometric presentation" : "top-down plan";
+    let sim = "not running";
+    if (state.flow && state.flow.on) sim = state.flow.playing ? "playing" : "shown (paused)";
+    const txt =
+      "Warehouse floor plan, " + GRID_W + " by " + GRID_H + " metres, " + mode + " view. " +
+      (n === 0
+        ? "No elements placed yet."
+        : n + " element" + (n === 1 ? "" : "s") + " placed") +
+      ". Live material-flow animation " + sim + "." +
+      " This is an interactive editor; the visual detail is illustrative, not a survey.";
+    if (txt !== _canvasDescCache) {
+      _canvasDescCache = txt;
+      el.textContent = txt;
+    }
   }
 
   // ================================================================
@@ -5626,6 +5704,10 @@
       closeAbout: closeAbout,
       zoomAt: zoomAt,
       fitToFloor: fitToFloor,
+      // v1.6 a11y/perf hooks for the self-test:
+      prefersReducedMotion: prefersReducedMotion,
+      cullToView: (els, bounds, pad) => V.cullToView(els, bounds, pad),
+      viewBounds: () => V.viewBounds(view, viewCssW, viewCssH),
     };
   }
 

@@ -47,6 +47,10 @@ Single-page, no-build, no-framework — hand-written HTML, CSS and vanilla JavaS
 ### Demo
 - **Guided demo + About** (`demo.js`): a one-click guided tour that sequences the existing features end-to-end — load a synthetic scenario → run WMS ops → play the material-flow animation → surface the live KPIs → offer the WMS Report — with an interruptible step HUD, plus a concise, honest "About / why this" panel. The demo re-implements nothing; it drives the same functions the manual controls call.
 
+### Accessibility & performance
+- **Accessibility** (real, but *not* a WCAG certification): the main regions are landmarked (`aria-label`ed), the `<canvas>` — opaque to screen readers — carries an `aria-label` **and** an `aria-describedby` offscreen summary that stays current with the layout (element count, floor size, view mode, sim status), the icon / short-text toolbar controls have accessible names, there's a visible `:focus-visible` outline on every control, and **`prefers-reduced-motion` is honoured** — the material-flow animation never auto-runs under it (a static/stepped frame instead), with the app staying fully usable.
+- **Performance for large layouts** (bounded effort, *not* a guarantee for arbitrary size): the per-frame element draw is culled to what's on screen via the pure, testable `WT.view.cullToView`, and the per-type shapes registry drops to a single LOD icon when zoomed out. Rendering only — **simulation results are unchanged and deterministic**.
+
 ### Companion app
 - **LSP Planner** (`lsp/`, linked from the header): a network-level logistics planning game — an abstract-region map editor, a deterministic cost/service evaluation engine, scored levels and A/B compare. Same offline, honest, teaching-scale philosophy.
 
@@ -84,24 +88,24 @@ Every documented behaviour is backed by a headless harness (no stubs). Run them 
 node test/run-all.mjs
 ```
 
-**28 harnesses** cover the simulation baselines, the share-link codec, CSV import, IFC export, the Compliance Check, the generator, the example library, the WMS/automation/flow/KPI/storage/report layers, the standards knowledge base, the guided-demo plan, the collapsible-cards helper, the saved-scenarios store, the Scenario A/B compare (with cross-consistency assertions proving a compared side equals the report/WMS/storage/automation/compliance modules), the live order pool (determinism, count conservation, the cap + honest overflow, the starving/saturating flags and the selection-rate tie to the WMS/flow throughput), the per-type 2D + 3D shape registry (a mock-context smoke test drawing every object type in both 2D and 3D, in light and dark, at small and large scale, asserting no non-finite coordinate and no throw — the practical way to verify a pure-draw feature that can't be pixel-tested headlessly — plus exact domain-type coverage and the height-driven 3D forms), the production hardening (the global error boundary installs and records without swallowing, the strict offline Content-Security-Policy meta is present with no `unsafe-eval`, no `eval(`/inline handlers anywhere, and the in-browser self-test is inert without its flag yet carries ≥ 25 wiring assertions), and an offline guard that asserts the app references no external assets. Everything is deterministic and ASCII-only; exit code 0 means all green.
+**29 harnesses** cover the simulation baselines, the share-link codec, CSV import, IFC export, the Compliance Check, the generator, the example library, the WMS/automation/flow/KPI/storage/report layers, the standards knowledge base, the guided-demo plan, the collapsible-cards helper, the saved-scenarios store, the Scenario A/B compare (with cross-consistency assertions proving a compared side equals the report/WMS/storage/automation/compliance modules), the live order pool (determinism, count conservation, the cap + honest overflow, the starving/saturating flags and the selection-rate tie to the WMS/flow throughput), the per-type 2D + 3D shape registry (a mock-context smoke test drawing every object type in both 2D and 3D, in light and dark, at small and large scale, asserting no non-finite coordinate and no throw — the practical way to verify a pure-draw feature that can't be pixel-tested headlessly — plus exact domain-type coverage and the height-driven 3D forms), the production hardening (the global error boundary installs and records without swallowing, the strict offline Content-Security-Policy meta is present with no `unsafe-eval`, no `eval(`/inline handlers anywhere, and the in-browser self-test is inert without its flag yet carries ≥ 25 wiring assertions), the accessibility + large-layout performance pass (the `#floor` canvas has an aria-label + an offscreen `aria-describedby` summary, the named toolbar controls have accessible names, a `prefers-reduced-motion` rule exists and the flow loop reads the flag so the animation never auto-runs under it, a `:focus-visible` outline + an `.sr-only` helper are present, and the pure `WT.view.cullToView` render-culling helper drops fully-off-screen elements, keeps inside/overlapping ones, never mutates its input and is deterministic), and an offline guard that asserts the app references no external assets. Everything is deterministic and ASCII-only; exit code 0 means all green.
 
 ### In-browser self-test
 
-The 28 harnesses above cover the **pure logic** in Node. The **DOM/UI** is covered by a **real in-browser end-to-end self-test** that drives the live app through the same handlers the UI uses. Serve the app over `http(s)`/localhost, then open:
+The 29 harnesses above cover the **pure logic** in Node. The **DOM/UI** is covered by a **real in-browser end-to-end self-test** that drives the live app through the same handlers the UI uses. Serve the app over `http(s)`/localhost, then open:
 
 ```
 index.html?selftest=1
 ```
 
-After boot it runs ~40 checks against the live app (every `WT.*` module present and correctly shaped, a clean error-free boot, the key panels/buttons in the DOM, loading an example, running WMS ops, stepping/playing the flow, the 2.5D toggle being a layout no-op, building the report, opening About/KB, the zoom controls) and writes a machine-readable line into the `#wt-selftest` element and the console:
+After boot it runs ~45 checks against the live app (every `WT.*` module present and correctly shaped, a clean error-free boot, the key panels/buttons in the DOM, loading an example, running WMS ops, stepping/playing the flow, the 2.5D toggle being a layout no-op, building the report, opening About/KB, the zoom controls, plus the v1.6 a11y/perf checks — canvas aria-label + offscreen summary, toolbar accessible names, the reduced-motion flag, and the pure `cullToView` culling) and writes a machine-readable line into the `#wt-selftest` element and the console:
 
 ```
-WT-SELFTEST: PASS 40/40
-WT-SELFTEST: FAIL 38/40 :: <failed check names>
+WT-SELFTEST: PASS 45/45
+WT-SELFTEST: FAIL 43/45 :: <failed check names>
 ```
 
-A normal load (no flag) is completely unaffected — the self-test code is inert. This verifies **wiring and a no-uncaught-error boot**, not visual/pixel correctness. See [`docs/PRODUCTION.md`](docs/PRODUCTION.md).
+A normal load (no flag) is completely unaffected — the self-test code is inert. This verifies **wiring and a no-uncaught-error boot**, not visual/pixel correctness. See [`docs/PRODUCTION.md`](docs/PRODUCTION.md) and the maintainer's [`docs/QA_CHECKLIST.md`](docs/QA_CHECKLIST.md).
 
 ## Licence
 

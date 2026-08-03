@@ -36,13 +36,13 @@ python -m http.server 8971 --bind 127.0.0.1
 
 ### Read the result
 
-After the app boots, the suite runs ~40 checks against the live app and writes a
+After the app boots, the suite runs ~45 checks against the live app and writes a
 single **machine-readable** line into the `#wt-selftest` element (and
 `console.log`s it, with per-check detail). Two exact formats:
 
 ```
-WT-SELFTEST: PASS 40/40
-WT-SELFTEST: FAIL 38/40 :: iso-toggle-layout-unchanged, report-build-sections
+WT-SELFTEST: PASS 45/45
+WT-SELFTEST: FAIL 43/45 :: iso-toggle-layout-unchanged, report-build-sections
 ```
 
 The `#wt-selftest` element also carries `data-pass`, `data-total` and
@@ -58,7 +58,7 @@ msedge --headless=new --disable-gpu --virtual-time-budget=12000 --dump-dom \
 ```
 
 (`chrome` works identically — same engine.) Exit criterion: the scraped line is
-`WT-SELFTEST: PASS 40/40`.
+`WT-SELFTEST: PASS 45/45`.
 
 ### What it checks
 
@@ -76,6 +76,12 @@ msedge --headless=new --disable-gpu --virtual-time-budget=12000 --dump-dom \
 - Building the report returns the expected sections and round-trips to JSON.
 - Opening the About and knowledge-base panels does not throw.
 - The zoom controls run.
+- **(v1.6 a11y/perf)** the `#floor` canvas carries an `aria-label` and an
+  `aria-describedby` offscreen summary that reflects the layout; the key
+  toolbar controls have accessible names; the reduced-motion flag hook is
+  present and boolean; and the pure `WT.view.cullToView` render-culling
+  helper keeps on-screen elements, drops fully off-screen ones, and does not
+  mutate its input.
 - After driving the app, `window.__WT_ERRORS__` is **still** empty.
 
 The suite drives these through the **same functions the UI uses** (exposed as
@@ -140,3 +146,41 @@ Notes:
 
 This is best-practice hardening for an offline app, **not** a security
 certification.
+
+---
+
+## 4. Accessibility & large-layout performance (v1.6)
+
+**Accessibility (real, but not a WCAG certification).**
+
+- The main regions are landmarked (`<main>` + the three columns carry
+  `aria-label`s), so screen-reader users can jump between the building tools,
+  the floor, and the simulation panels.
+- The `<canvas>` is opaque to assistive tech, so it carries an `aria-label`
+  **and** an `aria-describedby` pointing at an offscreen (`.sr-only`) summary
+  that `app.js` keeps current — element count, floor size (m), view mode, and
+  live-flow status.
+- Icon / short-text toolbar controls (zoom −/+, Fit, 100%, Pan, 2.5D, Guided
+  demo, Play/Pause) have explicit accessible names (`aria-label`/`title`);
+  every primary control is a native `<button>` (keyboard-operable) and the
+  custom card-header toggles are `role="button"` + `tabindex` + Enter/Space.
+- A visible `:focus-visible` outline is shown on every interactive control.
+- **Reduced motion:** when the OS asks to reduce motion, the continuous
+  material-flow animation does **not** auto-run — Play shows a single
+  static/stepped frame and the app stays fully usable (Step/Reset advance the
+  model on demand). CSS transitions/animations are also stilled. `app.js`
+  reads a cached `prefers-reduced-motion` matcher (`prefersReducedMotion()`).
+
+**Performance (bounded effort, not a guarantee for arbitrary size).**
+
+- The per-frame element draw is culled to the visible world rectangle with
+  the pure `WT.view.cullToView(elements, viewBounds, pad)` helper, so on a big
+  floor zoomed in, glyph/label work is proportional to what is *on screen*.
+- The per-type shapes registry already drops to a single LOD icon below an
+  on-screen size threshold (`shapes.js`), keeping zoomed-out frames cheap.
+- Simulation results are **unchanged** — this is rendering/throughput only,
+  and determinism is intact (the Node harnesses still pass byte-for-byte).
+
+Both are verified headlessly by `verify_a11y_perf.js` and, in a real browser,
+by the extended `?selftest=1` suite. See **[`QA_CHECKLIST.md`](QA_CHECKLIST.md)**
+for the maintainer's pre-release checklist.

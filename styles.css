@@ -119,6 +119,20 @@ h1, h2, h3 { margin: 0; font-weight: 650; }
 }
 .btn:hover { border-color: var(--accent); }
 .btn:active { transform: translateY(1px); }
+/* v1.6 a11y: a clearly visible keyboard focus ring on every interactive
+   control (buttons, button-styled links, custom role=button toggles and
+   anything tabbable). :focus-visible shows it for keyboard users without
+   ringing on mouse clicks. The 2px offset + high-contrast accent keeps it
+   legible in both themes. Note !important so it wins over the few controls
+   that clear their outline in an .active state (e.g. #isoBtn.active). */
+.btn:focus-visible,
+a.btn:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px !important;
+  border-radius: 8px;
+}
 .btn.primary { background: var(--primary); color: var(--primary-ink); border-color: transparent; font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn.ghost { background: transparent; }
@@ -469,8 +483,31 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   .topbar-select { flex: 1 1 auto; min-width: 0; max-width: none; }
 }
 
+/* v1.6 a11y: screen-reader-only text. Visually hidden but present in the
+   accessibility tree (NOT display:none, so it stays announceable). Used for
+   the offscreen canvas description (#floorDesc) the canvas points at via
+   aria-describedby. */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* v1.6 a11y: honour the OS "reduce motion" preference. CSS transitions and
+   keyframe animations are stilled here; the JS-driven material-flow rAF loop
+   is handled in app.js (Play shows a static/stepped frame, never auto-runs).
+   The app stays fully usable either way. */
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  *, *::before, *::after {
+    transition: none !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* =====================================================================

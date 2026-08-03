@@ -259,9 +259,24 @@
  *      (guards on location.search + early return) and carries >= 25 assertions,
  *      emitting the machine-readable `WT-SELFTEST: PASS n/n` into #wt-selftest
  *      + the console; app.js exposes window.__WT_TEST_API__ ONLY under the
- *      flag; and sw.js precaches errors.js + selftest.js at the bumped wt-v34
+ *      flag; and sw.js precaches errors.js + selftest.js at the bumped wt-v35
  *      cache. The LIVE self-test runs in a real browser (headless); this
  *      harness verifies its presence + wiring headlessly.
+ *  29. verify_a11y_perf.js - Accessibility + large-layout performance (v1.6):
+ *      the #floor <canvas> carries an aria-label AND an aria-describedby that
+ *      points at an offscreen (.sr-only) summary element; the named toolbar
+ *      controls (zoom -/+, Fit, 100%, Pan, 2.5D, Guided demo, Play/Pause) all
+ *      expose an accessible name; the main regions are landmarked; a
+ *      prefers-reduced-motion rule exists in styles.css and app.js reads a
+ *      reduced-motion flag in the flow playback path (so the animation never
+ *      auto-runs under it); a :focus-visible outline + an .sr-only helper
+ *      exist; and the PURE render-culling helper WT.view.cullToView drops
+ *      fully-off-screen elements, keeps inside/overlapping ones, respects the
+ *      pad, does not mutate its input and is deterministic (viewBounds inverts
+ *      the transform correctly). Plus docs/QA_CHECKLIST.md is present with the
+ *      key sections, selftest.js carries the new a11y/perf checks, and the
+ *      license stays proprietary (NO MIT in any touched file). A11y is real
+ *      but NOT a WCAG certification; perf is bounded-effort, not a guarantee.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -300,6 +315,7 @@ const HARNESSES = [
   { name: "Live order pool (verify_orderpool.js)", args: ["verify_orderpool.js"] },
   { name: "Per-type 2D+3D shape registry (verify_shapes.js)", args: ["verify_shapes.js"] },
   { name: "Production hardening: error boundary + self-test + CSP (verify_hardening.js)", args: ["verify_hardening.js"] },
+  { name: "Accessibility + large-layout performance (verify_a11y_perf.js)", args: ["verify_a11y_perf.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

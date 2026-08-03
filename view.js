@@ -155,6 +155,58 @@
     return { minX: 0, minY: 0, maxX: gridW, maxY: gridH, wCells: gridW, hCells: gridH };
   }
 
+  /* ------------------------------------------------------------------
+   * v1.6 performance: the WORLD-space rectangle currently visible in a
+   * vw x vh px viewport at the view's pan/scale. Pure inverse of the
+   * transform at the two viewport corners:
+   *   worldX = (screenX - panX) / (cellPx * scale)
+   * Returned as {minX,minY,maxX,maxY} in world cells. Used to cull the
+   * per-frame element draw so off-screen racks cost nothing to paint.
+   * ------------------------------------------------------------------ */
+  function viewBounds(view, vw, vh) {
+    const k = pxPerCell(view);
+    if (!(k > 0)) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    return {
+      minX: (0 - view.panX) / k,
+      minY: (0 - view.panY) / k,
+      maxX: (vw - view.panX) / k,
+      maxY: (vh - view.panY) / k,
+    };
+  }
+
+  /* ------------------------------------------------------------------
+   * Cull an element list to the ones whose axis-aligned footprint
+   * ({x,y,w,d} in world cells) OVERLAPS `bounds` (a {minX,minY,maxX,maxY}
+   * world rectangle, e.g. from viewBounds), optionally grown by `pad`
+   * cells so glyphs/labels that spill just past an edge are still drawn.
+   *
+   * PURE + DETERMINISTIC: it neither mutates `elements` nor any element,
+   * returns a NEW array in the SAME input order, and depends only on its
+   * arguments. Elements fully outside the (padded) bounds are excluded;
+   * ones inside or straddling an edge are kept. A missing/degenerate
+   * bounds returns a shallow copy (draw everything - never hide content).
+   * ------------------------------------------------------------------ */
+  function cullToView(elements, bounds, pad) {
+    if (!elements || !elements.length) return [];
+    if (!bounds || !isFinite(bounds.minX) || !isFinite(bounds.maxX) ||
+        !isFinite(bounds.minY) || !isFinite(bounds.maxY) ||
+        bounds.maxX < bounds.minX || bounds.maxY < bounds.minY) {
+      return elements.slice();
+    }
+    const p = pad > 0 ? pad : 0;
+    const minX = bounds.minX - p, minY = bounds.minY - p;
+    const maxX = bounds.maxX + p, maxY = bounds.maxY + p;
+    const out = [];
+    for (let i = 0; i < elements.length; i++) {
+      const e = elements[i];
+      const ex = +e.x, ey = +e.y;
+      const ex2 = ex + (+e.w || 0), ey2 = ey + (+e.d || 0);
+      // AABB overlap test: keep unless the footprint is fully off one side.
+      if (ex2 >= minX && ex <= maxX && ey2 >= minY && ey <= maxY) out.push(e);
+    }
+    return out;
+  }
+
   // Topmost (last-drawn) element containing an integer cell. This is the
   // one hit-test both the editor and the tests use, so selection stays
   // correct after any pan/zoom (the pointer is converted to a world cell
@@ -185,6 +237,8 @@
     clampPan,
     normalizeFloor,
     floorBounds,
+    viewBounds,
+    cullToView,
     elementAt,
   };
 })();

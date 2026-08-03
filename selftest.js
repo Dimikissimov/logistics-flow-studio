@@ -12,8 +12,8 @@
  * boot. It writes a MACHINE-READABLE result into a #wt-selftest element
  * (created here) and console.log()s it, in one of two exact formats:
  *
- *     WT-SELFTEST: PASS 39/39
- *     WT-SELFTEST: FAIL 37/39 :: <comma-separated failed check names>
+ *     WT-SELFTEST: PASS 45/45
+ *     WT-SELFTEST: FAIL 43/45 :: <comma-separated failed check names>
  *
  * A maintainer runs it headlessly (e.g. headless Edge) and reads the
  * #wt-selftest text / the console line.
@@ -273,6 +273,60 @@
       API.zoomAt(1.2);
       API.fitToFloor();
       return { ok: API.view.scale > 0, detail: "scale=" + API.view.scale.toFixed(3) };
+    });
+
+    // ---- v1.6 A11Y: the canvas exposes a text alternative --------------
+    // A canvas is opaque to assistive tech; it must carry an aria-label AND
+    // point at an offscreen description that reflects the current layout.
+    check("a11y-canvas-has-aria-label", function () {
+      var c = $("floor");
+      var label = c ? (c.getAttribute("aria-label") || "") : "";
+      return { ok: !!c && label.trim().length > 0, detail: c ? 'aria-label="' + label + '"' : "no #floor" };
+    });
+    check("a11y-canvas-described-by-summary", function () {
+      var c = $("floor");
+      var ref = c ? c.getAttribute("aria-describedby") : null;
+      var desc = ref ? $(ref) : null;
+      var text = desc ? (desc.textContent || "").trim() : "";
+      // The description is kept current by the app (element count / floor
+      // size / sim status); after boot + a render it must be non-trivial.
+      return { ok: !!desc && text.length > 10, detail: desc ? "#" + ref + " len=" + text.length : "no describedby target" };
+    });
+
+    // ---- v1.6 A11Y: key toolbar controls have accessible names ---------
+    check("a11y-toolbar-accessible-names", function () {
+      var ids = ["zoomInBtn", "zoomOutBtn", "zoomFitBtn", "zoom100Btn", "panBtn",
+        "isoBtn", "guidedDemoBtn", "flowPlayBtn", "flowPauseBtn"];
+      var missing = ids.filter(function (id) {
+        var b = $(id);
+        if (!b) return true;
+        var name = (b.getAttribute("aria-label") || b.textContent || b.getAttribute("title") || "").trim();
+        return name.length === 0;
+      });
+      return { ok: missing.length === 0, detail: missing.length ? "no accessible name: " + missing.join(",") : ids.length + " named" };
+    });
+
+    // ---- v1.6 A11Y: reduced-motion preference is honoured --------------
+    // The app exposes a reduced-motion flag it reads before auto-running the
+    // material-flow animation; here we assert the hook exists and is boolean.
+    check("a11y-reduced-motion-flag", function () {
+      if (!haveApi) return { ok: false, detail: "no test API" };
+      var rm = API.prefersReducedMotion;
+      return { ok: typeof rm === "function" && typeof rm() === "boolean", detail: "prefersReducedMotion()=" + (typeof rm === "function" ? rm() : "MISSING") };
+    });
+
+    // ---- v1.6 PERF: cullToView is pure + correct (live wiring) ----------
+    check("perf-cullToView-culls-offscreen", function () {
+      if (!haveApi || typeof API.cullToView !== "function") return { ok: false, detail: "no cullToView on API" };
+      var bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+      var inside = { id: "in", type: "shelf", x: 2, y: 2, w: 2, d: 2 };
+      var outside = { id: "out", type: "shelf", x: 100, y: 100, w: 2, d: 2 };
+      var els = [inside, outside];
+      var kept = API.cullToView(els, bounds, 0);
+      var mutated = els.length !== 2;
+      var determ = JSON.stringify(API.cullToView(els, bounds, 0)) === JSON.stringify(kept);
+      var ok = kept.length === 1 && kept[0].id === "in" && !mutated && determ;
+      return { ok: ok, detail: "kept=" + kept.length + " determ=" + determ + " noMutate=" + !mutated };
     });
 
     // ---- Restore the app to a normal, usable state ---------------------

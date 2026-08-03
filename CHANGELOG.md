@@ -6,6 +6,62 @@ seeded teaching heuristic unless you import your own data** — informed by publ
 standards (ISO 22400, DIN 15185, ASR, EN, VDI), not a certification and not a
 measurement of a real site.
 
+## [1.6.0] — 2026-08-03
+
+### Added
+- **Production hardening (pass 2): accessibility, large-layout performance, and
+  a QA/production checklist.** Real, verified improvements — additive and
+  non-breaking; a normal load looks and behaves exactly as before.
+  - **Accessibility (real, but *not* a WCAG certification).**
+    - **Landmarked regions:** `<main>` and the three columns carry `aria-label`s
+      (building tools / floor / simulation panels) so assistive tech can jump
+      between them.
+    - **The `<canvas>` gets a text alternative.** A canvas is opaque to screen
+      readers, so `#floor` now carries an `aria-label` **and** an
+      `aria-describedby` pointing at an **offscreen summary** (`#floorDesc`,
+      `.sr-only`) that `app.js` keeps current — element count, floor size (m),
+      view mode, and live-flow status. It only touches the DOM when the text
+      changes, so it stays cheap even during playback.
+    - **Named toolbar controls:** the icon / short-text controls (zoom −/+,
+      Fit, 100%, Pan, 2.5D, Guided demo, Play/Pause) all expose an accessible
+      name (`aria-label`/`title`). Every primary control is a native
+      `<button>` (keyboard-operable); the custom card-header toggles remain
+      `role="button"` + `tabindex` + Enter/Space.
+    - **Visible focus:** a `:focus-visible` outline is shown on every
+      interactive control (buttons, button-styled links, role=button toggles).
+    - **Reduced motion honoured:** with the OS "reduce motion" setting on, the
+      continuous material-flow animation **does not auto-run** — Play shows a
+      single static/stepped frame and the app stays **fully usable** (Step /
+      Reset advance the model on demand). This governs the one-click Guided
+      demo too. CSS transitions/animations are also stilled. `app.js` reads a
+      cached `prefers-reduced-motion` matcher.
+  - **Performance for large layouts (bounded effort, *not* a guarantee for
+    arbitrary size).** A new **pure, testable** helper
+    `WT.view.cullToView(elements, viewBounds, pad)` culls the per-frame element
+    draw to the elements whose footprint overlaps the visible world rectangle
+    (`WT.view.viewBounds`), so on a big floor (e.g. 120×80) zoomed in, glyph +
+    label work is proportional to what is **on screen**, not the whole layout.
+    The per-type shapes registry already drops to a single LOD icon when zoomed
+    out. **Simulation results are unchanged** — this is rendering/throughput
+    only; every logic/determinism harness still passes byte-for-byte.
+- **New maintainer doc** `docs/QA_CHECKLIST.md` — an honest pre-release
+  checklist (offline works; installs as a PWA; service-worker cache bumped;
+  `?selftest=1` → `PASS n/n` with the headless one-liner; no console errors;
+  CSP present; error boundary works; keyboard/a11y checks; large-layout perf
+  sanity; data stays on-device; honesty labels present; proprietary license).
+  Cross-linked from `docs/PRODUCTION.md` (new a11y/perf section).
+- **Self-test extended** (`selftest.js`, now **45** checks): the canvas
+  aria-label + offscreen description, key toolbar controls having accessible
+  names, the reduced-motion flag hook, and the pure `cullToView` culling being
+  correct + non-mutating — driven against the live app.
+- **New harness** `verify_a11y_perf.js` (**29th**, ≥ 10 checks) gates all of
+  the above headlessly: the canvas aria wiring, named toolbar controls,
+  landmarked regions, the `prefers-reduced-motion` rule + the flow loop reading
+  the flag, `:focus-visible` + `.sr-only`, `cullToView`/`viewBounds` purity +
+  correctness + determinism, `QA_CHECKLIST.md` presence, the new self-test
+  checks, and the license staying proprietary (no MIT in any touched file).
+- Service-worker cache bumped **`wt-v34` → `wt-v35`**.
+
 ## [1.5.0] — 2026-08-03
 
 ### Added
