@@ -58,6 +58,16 @@
  *      known warehouse+viewport, grid-snap staying in world coords, a
  *      non-40x24 floor accepted with correct bounds, and the hit-test
  *      resolving the right element after a pan+zoom.
+ *  13. verify_flowsim.js      - Live material-flow animation model (P3):
+ *      the 5-stage flow spine (receiving..shipping), determinism on an
+ *      examples and a generated layout (identical MU positions/counts),
+ *      unit conservation at every step (spawned == in-flight + completed),
+ *      a finite pool draining exactly, MUs staying within floor bounds,
+ *      MUs progressing through stages in order, throughput responding to
+ *      the layout (more docks/automation -> higher line throughput and
+ *      more completions, monotonic via WT.wms), world-cell positions, the
+ *      lineThroughput tied to WT.wms.capacities, and the SYNTHETIC / NOT
+ *      a real DES engine / NOT a measurement / NOT a certification labels.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -79,6 +89,7 @@ const HARNESSES = [
   { name: "AI Environment Generator (verify_generate.js)", args: ["verify_generate.js"] },
   { name: "Example Scenarios + data export (verify_examples.js)", args: ["verify_examples.js"] },
   { name: "WMS Operations layer (verify_wms.js)", args: ["verify_wms.js"] },
+  { name: "Live material-flow animation (verify_flowsim.js)", args: ["verify_flowsim.js"] },
   { name: "viewport transform + floor size (verify_view.js)", args: ["verify_view.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
