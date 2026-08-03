@@ -18,6 +18,18 @@
   const WT = (window.WT = window.WT || {});
   const D = WT.domain;
 
+  // Fallback-safe read of an editable Advisor threshold from the standards
+  // knowledge base (knowledge.js -> WT.kb). When the KB is absent or the
+  // entry is missing, the original literal is returned, so DEFAULT advice
+  // is unchanged; editing a threshold in the KB changes when a suggestion
+  // fires. Read at call time (never cached).
+  function kbNum(id, fallback) {
+    const kb = WT.kb;
+    if (!kb || typeof kb.get !== "function") return fallback;
+    const v = kb.get(id);
+    return typeof v === "number" && isFinite(v) ? v : fallback;
+  }
+
   // severity -> sort weight (lower sorts first)
   const RANK = { high: 0, medium: 1, low: 2, good: 3 };
 
@@ -66,7 +78,7 @@
         { elements: els, gridW: layout.gridW, gridH: layout.gridH, cell },
         config
       );
-      if (opt.improved && opt.travelDeltaPct >= 2 && opt.movedCount > 0) {
+      if (opt.improved && opt.travelDeltaPct >= kbNum("advisor.optTravelDeltaPct", 2) && opt.movedCount > 0) {
         out.push(s(
           "medium",
           `Storage sits farther from the outbound dock than it needs to (${opt.movedCount} element${opt.movedCount > 1 ? "s" : ""} could move closer).`,
@@ -139,14 +151,16 @@
       ));
     } else {
       const fill = base.storageFillPct;
-      if (fill >= 95) {
+      const fillHigh = kbNum("advisor.fill.highPct", 95);
+      const fillLow = kbNum("advisor.fill.lowPct", 40);
+      if (fill >= fillHigh) {
         out.push(s(
           "medium",
           `Storage is ~${fill.toFixed(0)}% full — almost no working slack.`,
           "High occupancy causes congestion, blocked put-away and honeycombing; ~85% is a common practical target.",
           `Add pallet positions or reduce inventory (${base.palletPositionsUsed}/${base.palletPositionsTotal} used).`
         ));
-      } else if (fill < 40) {
+      } else if (fill < fillLow) {
         out.push(s(
           "medium",
           `Storage is only ~${fill.toFixed(0)}% full — capital and floor space are under-used.`,
@@ -200,7 +214,7 @@
         if (def.rotation === "LIFO") lifoPos += cap;
       }
       const lifoShare = totalPos > 0 ? lifoPos / totalPos : 0;
-      if (lifoShare >= 0.35) {
+      if (lifoShare >= kbNum("advisor.lifoShareWarn", 0.35)) {
         out.push(s(
           "medium",
           `~${(lifoShare * 100).toFixed(0)}% of pallet positions are in LIFO systems (push-back / drive-in / block-stack).`,
@@ -213,7 +227,7 @@
     // ---- Rule 8: high-velocity small parts -> carton-flow ------------
     if (base.ok && storage.length) {
       const hasPickFace = storage.some((e) => (D.ELEMENTS[e.type] || {}).pickFace);
-      if (!hasPickFace && config.skuCount >= 120) {
+      if (!hasPickFace && config.skuCount >= kbNum("advisor.smallPartsSkuThreshold", 120)) {
         out.push(s(
           "medium",
           `${config.skuCount} SKUs with no carton-flow / mezzanine pick faces.`,

@@ -32,6 +32,19 @@
   const D = WT.domain;
   const ELEMENTS = D.ELEMENTS;
 
+  // Fallback-safe read of an editable generator parameter from the
+  // standards knowledge base (knowledge.js -> WT.kb). Absent KB or missing
+  // entry -> the original profile literal, so a generated baseline is
+  // BYTE-IDENTICAL by default (verify_generate.js pins this); editing the
+  // profile's working aisle in the KB re-flows the baseline to it. Read at
+  // call time so a live edit takes effect on the next generate.
+  function kbNum(id, fallback) {
+    const kb = WT.kb;
+    if (!kb || typeof kb.get !== "function") return fallback;
+    const v = kb.get(id);
+    return typeof v === "number" && isFinite(v) ? v : fallback;
+  }
+
   const GENERATOR_VERSION = "wt-generate-1";
   const SERIALIZE_VERSION = "wt-1"; // matches app.js serialize()/share.js
 
@@ -216,7 +229,7 @@
     const reserve = normalizeZones(opts.reserve);
     const minAisle = Number.isFinite(opts.minAisleOverride) && opts.minAisleOverride > 0
       ? opts.minAisleOverride
-      : profile.minAisleMetres;
+      : kbNum("generator." + profileKey + ".minAisle", profile.minAisleMetres);
     const aisle = aisleCells(minAisle);
     const pitch = 1 + aisle; // one rack row (d=1) + one working aisle
 

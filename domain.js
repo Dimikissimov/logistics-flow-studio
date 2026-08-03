@@ -383,11 +383,22 @@
    * Helpers.
    * ------------------------------------------------------------------ */
   function elementCapacity(el) {
-    // Pallet positions contributed by a storage element instance.
+    // Pallet positions contributed by a storage element instance. The
+    // per-type pallet density is a seed in the editable standards
+    // knowledge base (knowledge.js -> WT.kb "rack.<type>.density"); we
+    // read it fallback-safe so an untouched/absent KB uses the model's own
+    // def.density (BYTE-IDENTICAL default), while an edited density flows
+    // straight into capacity, fill % and the KPIs.
     const def = ELEMENTS[el.type];
     if (!def || def.category !== "storage") return 0;
+    let density = def.density;
+    const kb = WT.kb;
+    if (kb && typeof kb.get === "function") {
+      const v = kb.get("rack." + el.type + ".density");
+      if (typeof v === "number" && isFinite(v) && v > 0) density = v;
+    }
     const areaM2 = el.w * el.d * METRES_PER_CELL * METRES_PER_CELL;
-    return Math.max(0, Math.round(areaM2 * def.density));
+    return Math.max(0, Math.round(areaM2 * density));
   }
 
   function palletById(id) {

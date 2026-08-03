@@ -40,6 +40,22 @@
 
   const REPORT_VERSION = "wt-compliance-1";
 
+  // Read a numeric guidance value from the EDITABLE standards knowledge
+  // base (knowledge.js -> WT.kb), falling back to the original domain
+  // constant when the KB is absent (e.g. a headless harness that does not
+  // load knowledge.js) or the entry is missing/non-numeric. This is what
+  // makes the guidance values user-editable while keeping DEFAULT
+  // behaviour BYTE-IDENTICAL: an untouched (or absent) KB returns exactly
+  // the constant, so every existing verdict is unchanged; editing a value
+  // in the KB visibly changes the verdict. Read at call time (never
+  // cached) so a live edit takes effect on the next check.
+  function kbNum(id, fallback) {
+    const kb = WT.kb;
+    if (!kb || typeof kb.get !== "function") return fallback;
+    const v = kb.get(id);
+    return typeof v === "number" && isFinite(v) ? v : fallback;
+  }
+
   // Stable, bilingual "this is NOT a certification" disclaimer. Matches
   // the tone of the existing standards-panel disclaimer (index.html) and
   // the domain.js "design aid only, not a compliance check" wording.
@@ -203,9 +219,10 @@
         de: "min. " + round1(minAisle) + " m freier Arbeitsgang fuer die gewaehlte Fahrzeugklasse",
       },
     };
+    const warnMargin = kbNum("compliance.aisle.warnMargin", AISLE_WARN_MARGIN);
     const pairs = D.facingAislePairs(layout.elements);
     const fails = pairs.filter((p) => p.gapM < minAisle - 1e-6);
-    const warns = pairs.filter((p) => p.gapM >= minAisle - 1e-6 && p.gapM < minAisle + AISLE_WARN_MARGIN - 1e-6);
+    const warns = pairs.filter((p) => p.gapM >= minAisle - 1e-6 && p.gapM < minAisle + warnMargin - 1e-6);
     const out = [];
 
     // Aggregate per status (one finding each) so a big layout does not
@@ -281,7 +298,7 @@
   function checkTrafficRoute(layout, occ, W, H) {
     const rule = { en: "Main traffic route", de: "Hauptverkehrsweg" };
     const guideline = "ASR A1.8";
-    const minM = D.COMPLIANCE.mainRouteMinMetres;
+    const minM = kbNum("compliance.trafficRoute.min", D.COMPLIANCE.mainRouteMinMetres);
     const cell = layout.cell || 1;
     const informedBy = {
       value: minM, unit: "m",
@@ -340,8 +357,8 @@
     const rule = { en: "Escape route", de: "Fluchtweg" };
     const guideline = "ASR A2.3";
     const cell = layout.cell || 1;
-    const widthMin = D.COMPLIANCE.escapeWidthMinMetres;
-    const travelMax = D.COMPLIANCE.escapeMaxTravelMetres;
+    const widthMin = kbNum("compliance.escapeRoute.width", D.COMPLIANCE.escapeWidthMinMetres);
+    const travelMax = kbNum("compliance.escapeRoute.travel", D.COMPLIANCE.escapeMaxTravelMetres);
     const informedBy = {
       value: widthMin, unit: "m",
       label: {
@@ -523,7 +540,14 @@
       cell: (layout && layout.cell) || D.METRES_PER_CELL,
     };
     const cfg = config || {};
-    const minAisle = typeof cfg.minAisleMetres === "number" ? cfg.minAisleMetres : D.AISLE.defaultMinMetres;
+    const minAisle = typeof cfg.minAisleMetres === "number"
+      ? cfg.minAisleMetres
+      : kbNum("compliance.aisle.min", D.AISLE.defaultMinMetres);
+    // Resolve the shared guidance values ONCE so the guidelines summary
+    // block below shows exactly what the checks used (KB-editable).
+    const mainRouteMin = kbNum("compliance.trafficRoute.min", D.COMPLIANCE.mainRouteMinMetres);
+    const escapeWidth = kbNum("compliance.escapeRoute.width", D.COMPLIANCE.escapeWidthMinMetres);
+    const escapeTravel = kbNum("compliance.escapeRoute.travel", D.COMPLIANCE.escapeMaxTravelMetres);
     const W = lay.gridW, H = lay.gridH;
 
     const occ = buildOcc(lay);
@@ -551,9 +575,9 @@
         { code: "DIN 15185", topic: { en: "Working aisles", de: "Arbeitsgaenge" },
           value: round1(minAisle) + " m (selected truck class)", note: D.AISLE.note },
         { code: "ASR A1.8", topic: { en: "Traffic routes", de: "Verkehrswege" },
-          value: D.COMPLIANCE.mainRouteMinMetres + " m main route", note: D.COMPLIANCE.mainRouteNote },
+          value: mainRouteMin + " m main route", note: D.COMPLIANCE.mainRouteNote },
         { code: "ASR A2.3", topic: { en: "Escape routes", de: "Fluchtwege" },
-          value: D.COMPLIANCE.escapeWidthMinMetres + " m width; <= " + D.COMPLIANCE.escapeMaxTravelMetres + " m travel",
+          value: escapeWidth + " m width; <= " + escapeTravel + " m travel",
           note: D.COMPLIANCE.escapeNote },
       ],
       summary,

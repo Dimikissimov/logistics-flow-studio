@@ -524,6 +524,39 @@
         <div id="complOut" class="compl-out"><p class="empty">Run the check to see pass / warn / fail findings. Click a finding to highlight the element(s) on the floor.</p></div>
       </section>
 
+      <!-- P5: Editable standards knowledge base. The standards-derived
+           numeric parameters + thresholds the compliance check / advisor /
+           generator / capacity model reason over, collected as ONE
+           editable, versioned store (knowledge.js -> WT.kb). View, edit,
+           add rules, reset, and import/export the whole KB as JSON. Honest
+           by design: values are informed by ISO/DIN/EN/VDI/ASR, NOT a
+           certification; the user's edits are the user's responsibility. -->
+      <section class="card" id="kbCard">
+        <details id="kbDetails">
+          <summary class="std-summary">Knowledge base (standards) — <em>editable &amp; versioned</em></summary>
+          <div id="kbHonesty" class="gen-honesty kb-honesty"></div>
+          <p class="hint">The standards-derived <strong>parameters and thresholds the app reasons over</strong> — the
+            Compliance Check (ASR A1.8 / ASR A2.3 / DIN 15185), the Advisor, the AI Environment Generator and the
+            capacity model — as one editable, versioned store. Change a value and the engines use it on the next run;
+            <strong>Reset</strong> restores the sourced default. <strong>Export/Import</strong> saves or shares your whole KB as JSON.</p>
+          <div class="kb-toolbar">
+            <label for="kbCategory" class="kb-toolbar-label">Category</label>
+            <select id="kbCategory" class="topbar-select"></select>
+          </div>
+          <div class="btn-grid" style="margin-top:8px">
+            <button id="kbAddRuleBtn" class="btn" type="button" title="Add your own rule/fact to the knowledge base (a labelled value with a source you supply)">Add rule</button>
+            <button id="kbResetAllBtn" class="btn danger" type="button" title="Restore every entry to its sourced default and remove your custom rules">Reset all</button>
+            <button id="kbExportBtn" class="btn" type="button" title="Download the whole knowledge base as JSON (offline, nothing uploaded) so you can save, version or share it">Export KB</button>
+            <button id="kbImportBtn" class="btn" type="button" title="Load a knowledge base JSON you exported earlier (validated; replaces the current KB)">Import KB</button>
+          </div>
+          <div id="kbList" class="kb-list"><!-- filled by app.js --></div>
+          <p class="std-disclaimer"><strong>Values are <em>informed by</em> ISO / DIN / EN / VDI / ASR — this is NOT a certification.</strong>
+            Numbers behind paid standard texts are recorded from official abstracts / reputable secondary sources and remain
+            <strong>yours to verify</strong>. Any value you edit is your own responsibility to justify; a passing check never means a layout is compliant.</p>
+          <input id="kbImportInput" type="file" accept="application/json,.json" hidden />
+        </details>
+      </section>
+
       <!-- P2: German-standards panel (collapsible) -->
       <section class="card">
         <details id="stdDetails">
@@ -566,6 +599,7 @@
         writer from ifc.js and the CSV import parser from data.js.) -->
   <script src="view.js"></script>
   <script src="domain.js"></script>
+  <script src="knowledge.js"></script>
   <script src="tiers.js"></script>
   <script src="simulation.js"></script>
   <script src="optimizer.js"></script>

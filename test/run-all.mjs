@@ -116,6 +116,18 @@
  *      flowsim retrieval leg moving the storage waypoint to the real
  *      slotting anchor with a byte-identical no-assignment FALLBACK, and
  *      the SYNTHETIC / heuristic / NOT a measurement honesty labels.
+ *  19. verify_kb.js         - Editable standards knowledge base (P5):
+ *      WT.kb defaults MATCH the previously-hardcoded constants (compliance
+ *      guidance, generator aisles, rack densities - one source of truth),
+ *      get/set/reset edit + VALIDATE (reject non-numeric / negative /
+ *      out-of-range), addRule adds a retrievable entry (never overwriting
+ *      a seed), exportJson -> importJson round-trips the whole KB EXACTLY
+ *      including a user rule, editing a compliance threshold CHANGES
+ *      compliance.check's verdict for a borderline layout while the
+ *      DEFAULT KB leaves every existing verdict identical (regression
+ *      guard), editing a rack density flows into elementCapacity (reset
+ *      restores it), and the informed-by / NOT-a-certification / paywall
+ *      "verify" honesty labels are present on the banner and every entry.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -144,6 +156,7 @@ const HARNESSES = [
   { name: "Material-flow realism: stations/queues/conveyor (verify_flowB.js)", args: ["verify_flowB.js"] },
   { name: "2.5D isometric presentation projection (verify_iso.js)", args: ["verify_iso.js"] },
   { name: "Storage & inventory: slotting/occupancy/retrieval (verify_storage.js)", args: ["verify_storage.js"] },
+  { name: "Editable standards knowledge base (verify_kb.js)", args: ["verify_kb.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

@@ -2471,6 +2471,184 @@
     }
   }
 
+  // ================================================================
+  // KNOWLEDGE BASE (P5) - the editable, versioned standards store.
+  // ----------------------------------------------------------------
+  // Renders WT.kb by category with each entry's value + unit + source +
+  // an honest note and an edit field. Buttons: per-entry Save/Reset,
+  // Add rule, Reset all, Export/Import the whole KB (JSON). Editing a
+  // value changes what the compliance check / advisor / generator read
+  // on the next run (the point of "integrate exactly what we want").
+  // DOM-only; the pure store is verified headless by verify_kb.js.
+  // ================================================================
+  let kbCategoryFilter = "all";
+
+  function buildKnowledgeBase() {
+    if (!WT.kb) return;
+    const banner = $("kbHonesty");
+    if (banner) {
+      banner.innerHTML =
+        "<strong>Editable, versioned standards knowledge base.</strong> " +
+        `<span class="compl-en">${esc(WT.kb.meta.honesty.en)}</span>` +
+        `<span class="compl-de" lang="de">${esc(WT.kb.meta.honesty.de)}</span>`;
+    }
+    const sel = $("kbCategory");
+    if (sel && !sel.dataset.built) {
+      const opts = ['<option value="all">All categories</option>'].concat(
+        WT.kb.meta.categories.map((c) => `<option value="${esc(c.key)}">${esc(c.label)}</option>`)
+      );
+      // custom rules live under their own category too
+      opts.push('<option value="custom">Custom rules</option>');
+      sel.innerHTML = opts.join("");
+      sel.dataset.built = "1";
+      sel.addEventListener("change", () => { kbCategoryFilter = sel.value; renderKnowledgeBase(); });
+    }
+    renderKnowledgeBase();
+    wireKnowledgeButtons();
+  }
+
+  function renderKnowledgeBase() {
+    const wrap = $("kbList");
+    if (!wrap || !WT.kb) return;
+    const entries = WT.kb.list(kbCategoryFilter === "all" ? undefined : kbCategoryFilter);
+    if (!entries.length) {
+      wrap.innerHTML = '<p class="empty">No entries in this category yet. Use <strong>Add rule</strong> to record your own.</p>';
+      return;
+    }
+    const defs = WT.kb.defaults;
+    wrap.innerHTML = entries
+      .map((e, i) => {
+        const isSeed = WT.kb.isSeed(e.id);
+        const edited = isSeed && defs[e.id] !== e.value;
+        const val = e.kind === "text" ? e.value : e.value;
+        return (
+          `<div class="kb-item${edited ? " edited" : ""}" id="kb-item-${i}">` +
+          `<div class="kb-head"><span class="kb-label">${esc(e.label)}</span>` +
+          `<span class="kb-cat">${esc(e.category)}</span>` +
+          (edited ? '<span class="kb-badge">edited</span>' : "") +
+          (isSeed ? "" : '<span class="kb-badge custom">custom</span>') +
+          "</div>" +
+          '<div class="kb-edit">' +
+          `<input class="kb-input" id="kb-in-${i}" type="${e.kind === "text" ? "text" : "number"}" step="any" value="${esc(String(val))}" aria-label="${esc(e.label)} value" />` +
+          `<span class="kb-unit">${esc(e.unit || "")}</span>` +
+          `<button class="btn small" id="kb-save-${i}" type="button">Save</button>` +
+          `<button class="btn small ghost" id="kb-reset-${i}" type="button">Reset</button>` +
+          "</div>" +
+          `<div class="kb-source"><span class="kb-src-label">Source:</span> ${esc(e.source)}</div>` +
+          `<div class="kb-note">${esc(e.note)}</div>` +
+          "</div>"
+        );
+      })
+      .join("");
+    entries.forEach((e, i) => {
+      const input = $("kb-in-" + i);
+      const save = $("kb-save-" + i);
+      const reset = $("kb-reset-" + i);
+      if (save) save.addEventListener("click", () => applyKbEdit(e.id, input));
+      if (input) input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); applyKbEdit(e.id, input); } });
+      if (reset) reset.addEventListener("click", () => { WT.kb.reset(e.id); afterKbChange(`Reset "${e.label}" to its sourced default.`); });
+    });
+  }
+
+  function applyKbEdit(id, input) {
+    if (!input) return;
+    const ok = WT.kb.set(id, input.value);
+    if (!ok) {
+      const v = WT.kb.validate(id, input.value);
+      toast("Not applied: " + (v.error || "invalid value") + ". The value is unchanged.", "warn");
+      const cur = WT.kb.get(id);
+      if (cur !== undefined) input.value = String(cur);
+      return;
+    }
+    afterKbChange(`Updated "${id}" to ${WT.kb.get(id)}. The compliance check / advisor / generator will use it on the next run.`);
+  }
+
+  // After any KB change: re-render the panel, refresh the live standards
+  // read-out, and mark any shown result as stale (the engines now read
+  // different guidance). Deterministic, no auto-rerun.
+  function afterKbChange(msg) {
+    renderKnowledgeBase();
+    updateStandardsLive();
+    if (msg) { status(msg); toast(msg, "ok"); }
+  }
+
+  function wireKnowledgeButtons() {
+    const add = $("kbAddRuleBtn");
+    if (add && !add.dataset.wired) {
+      add.dataset.wired = "1";
+      add.addEventListener("click", addKbRule);
+    }
+    const resetAll = $("kbResetAllBtn");
+    if (resetAll && !resetAll.dataset.wired) {
+      resetAll.dataset.wired = "1";
+      resetAll.addEventListener("click", () => {
+        if (!window.confirm("Reset the whole knowledge base to its sourced defaults and remove your custom rules?")) return;
+        WT.kb.reset();
+        afterKbChange("Knowledge base reset to sourced defaults (custom rules removed).");
+      });
+    }
+    const exp = $("kbExportBtn");
+    if (exp && !exp.dataset.wired) {
+      exp.dataset.wired = "1";
+      exp.addEventListener("click", () => {
+        downloadFile("warehousetwin-knowledge-base.json", WT.kb.exportJson(), "application/json");
+        status("Exported the knowledge base as JSON (offline — nothing uploaded).");
+      });
+    }
+    const imp = $("kbImportBtn");
+    const impInput = $("kbImportInput");
+    if (imp && !imp.dataset.wired) {
+      imp.dataset.wired = "1";
+      imp.addEventListener("click", () => impInput && impInput.click());
+    }
+    if (impInput && !impInput.dataset.wired) {
+      impInput.dataset.wired = "1";
+      impInput.addEventListener("change", async () => {
+        const file = impInput.files && impInput.files[0];
+        impInput.value = "";
+        if (!file) return;
+        try {
+          const text = await readFileText(file);
+          const res = WT.kb.importJson(text);
+          if (!res.ok && !res.applied && !res.added) {
+            toast("Import failed: " + (res.error || "unrecognised file") + ".", "warn");
+            return;
+          }
+          afterKbChange(`Imported knowledge base: ${res.applied} value(s) applied, ${res.added} custom rule(s) added${res.errors && res.errors.length ? ", " + res.errors.length + " skipped" : ""}.`);
+        } catch (err) {
+          toast("Could not read that file: " + err.message, "warn");
+        }
+      });
+    }
+  }
+
+  function addKbRule() {
+    if (!WT.kb) return;
+    const label = window.prompt("Rule / fact label (e.g. \"Max block-stack height (site rule)\"):", "");
+    if (label == null || !label.trim()) return;
+    const raw = window.prompt("Numeric value (leave blank for a text note):", "");
+    if (raw == null) return;
+    let entry;
+    if (raw.trim() === "") {
+      const txt = window.prompt("Text of the note/fact:", "");
+      if (txt == null || !txt.trim()) return;
+      entry = { label: label.trim(), value: txt.trim(), kind: "text", category: "custom" };
+    } else {
+      const num = Number(raw);
+      if (!isFinite(num)) { toast("That is not a number — rule not added.", "warn"); return; }
+      const unit = window.prompt("Unit (optional, e.g. m, %, SKUs):", "") || "";
+      entry = { label: label.trim(), value: num, unit: unit.trim(), category: "custom" };
+    }
+    const src = window.prompt("Source / justification (optional but honest):", "");
+    if (src != null && src.trim()) entry.source = src.trim();
+    const id = WT.kb.addRule(entry);
+    if (!id) { toast("Rule not added (check the value).", "warn"); return; }
+    kbCategoryFilter = "all";
+    const sel = $("kbCategory");
+    if (sel) sel.value = "all";
+    afterKbChange(`Added your rule "${label.trim()}" to the knowledge base.`);
+  }
+
   // ---- Compliance Check (workplace-guideline-aware) ----------------
   // Wires the pure compliance.js report into a panel. The header carries
   // the prominent DE+EN "design aid, NOT a certification" disclaimer,
@@ -4504,6 +4682,7 @@
     buildAbControls();
     buildStandards();
     buildCompliance();
+    buildKnowledgeBase();
     buildGeneratePanel();
     buildExamplesPanel();
     buildExampleQuickPick();
