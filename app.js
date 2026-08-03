@@ -3411,6 +3411,160 @@
     reader.readAsText(file);
   }
 
+  // ================================================================
+  // v1.1: SAVE / LOAD NAMED SCENARIOS (scenarios.js -> WT.scenarios)
+  // ----------------------------------------------------------------
+  // The user's OWN saved plants, stored ON THIS DEVICE only (browser
+  // localStorage via the guarded WT.scenarios store) - distinct from the
+  // read-only synthetic example scenarios. A snapshot is built from the
+  // SAME serialize() the JSON export + share link use (its own save
+  // timestamp stripped, exactly like buildShareHash, so the stored body is
+  // deterministic; the scenario's savedAt is recorded separately). When a
+  // real-data bundle is loaded it rides along so the plant comes back with
+  // its data. Loading applies the snapshot through the SAME deserialize()
+  // loader as JSON import - no bespoke apply path.
+  // ================================================================
+  function scenarioSnapshot() {
+    const snap = serialize();
+    delete snap.savedAt; // a scenario carries its own record-level savedAt
+    // Optionally capture the imported SKU/order data bundle (when loaded) so
+    // the saved plant restores with its own data. Layout-only otherwise.
+    if (state.wmsBundle && WT.wmsdata && WT.wmsdata.isLoaded && WT.wmsdata.isLoaded()) {
+      snap.wmsBundle = state.wmsBundle;
+      snap.wmsMeta = state.datasetMeta || null;
+      snap.datasetKind = state.datasetKind || null;
+    }
+    return snap;
+  }
+
+  function refreshScenarioList(selectName) {
+    if (!WT.scenarios) return;
+    const sel = $("scenarioSelect");
+    if (!sel) return;
+    const items = WT.scenarios.list();
+    sel.innerHTML = "";
+    items.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s.name;
+      const sm = s.summary || {};
+      const bits = [(sm.elements || 0) + " element" + (sm.elements === 1 ? "" : "s")];
+      if (sm.floor) bits.push(sm.floor + " m");
+      if (sm.hasData) bits.push("+ data");
+      opt.textContent = s.name + " — " + bits.join(", ");
+      sel.appendChild(opt);
+    });
+    if (selectName) sel.value = selectName;
+    const any = items.length > 0;
+    ["scenarioLoadBtn", "scenarioRenameBtn", "scenarioDeleteBtn", "scenarioExportBtn"].forEach((id) => {
+      const b = $(id);
+      if (b) b.disabled = !any;
+    });
+    const empty = $("scenarioEmpty");
+    if (empty) empty.hidden = any;
+  }
+
+  function scenarioSaveCurrent() {
+    if (!WT.scenarios) { toast("Saved scenarios need scenarios.js.", "warn"); return; }
+    const input = $("scenarioName");
+    const name = (input && input.value ? input.value : "").trim();
+    if (!name) { toast("Type a name for this scenario first.", "warn"); if (input) input.focus(); return; }
+    const snap = scenarioSnapshot();
+    const existed = WT.scenarios.has(name);
+    try {
+      WT.scenarios.save(name, snap, { savedAt: new Date().toISOString() });
+    } catch (err) { toast("Could not save scenario: " + err.message, "err"); return; }
+    // The guarded store no-ops when localStorage is blocked (private mode):
+    // detect it honestly rather than claim a save that did not persist.
+    if (!WT.scenarios.has(name)) {
+      toast("Could not save (browser storage is blocked). Try Export bundle instead.", "err");
+      return;
+    }
+    if (input) input.value = "";
+    refreshScenarioList(name);
+    toast((existed ? "Updated" : "Saved") + ' scenario "' + name + '" on this device' + (snap.wmsBundle ? " (with your imported data)" : "") + ".");
+    status('Saved your scenario "' + name + '" — on this device only, nothing uploaded. Loading it later reuses the same loader as JSON import.');
+  }
+
+  function scenarioLoadSelected() {
+    if (!WT.scenarios) return;
+    const sel = $("scenarioSelect");
+    const name = sel ? sel.value : "";
+    if (!name) { toast("No scenario selected.", "warn"); return; }
+    const snap = WT.scenarios.load(name);
+    if (!snap) { toast("That scenario could not be found.", "warn"); refreshScenarioList(); return; }
+    try {
+      deserialize(snap, 'saved scenario "' + name + '"'); // SAME loader as JSON import
+    } catch (err) { toast("Could not load scenario: " + err.message, "err"); return; }
+    // Restore the saved data bundle when the scenario carries one; otherwise
+    // leave the current data untouched (honest partial restore).
+    if (snap.wmsBundle && WT.wmsdata && Array.isArray(snap.wmsBundle.skuMaster) && snap.wmsBundle.skuMaster.length) {
+      try { applyWmsBundle(snap.wmsBundle, snap.wmsMeta || null); } catch (_) {}
+    }
+    scheduleSave();
+    toast('Loaded your scenario "' + name + '".' + (snap.wmsBundle ? " Your imported data was restored too." : ""));
+  }
+
+  function scenarioRenameSelected() {
+    if (!WT.scenarios) return;
+    const sel = $("scenarioSelect");
+    const oldName = sel ? sel.value : "";
+    if (!oldName) return;
+    const next = window.prompt("Rename scenario", oldName);
+    if (next == null) return;
+    const trimmed = next.trim();
+    if (!trimmed) { toast("A scenario name can't be empty.", "warn"); return; }
+    try {
+      if (!WT.scenarios.rename(oldName, trimmed)) { toast("Scenario not found.", "warn"); refreshScenarioList(); return; }
+    } catch (err) { toast(err.message, "err"); return; }
+    refreshScenarioList(trimmed);
+    toast('Renamed to "' + trimmed + '".');
+  }
+
+  function scenarioDeleteSelected() {
+    if (!WT.scenarios) return;
+    const sel = $("scenarioSelect");
+    const name = sel ? sel.value : "";
+    if (!name) return;
+    if (!window.confirm('Delete scenario "' + name + '" from this browser? This cannot be undone.')) return;
+    WT.scenarios.remove(name);
+    refreshScenarioList();
+    toast('Deleted "' + name + '".');
+  }
+
+  function scenarioExportBundle() {
+    if (!WT.scenarios) return;
+    const items = WT.scenarios.list();
+    if (!items.length) { toast("No saved scenarios to export yet.", "warn"); return; }
+    const json = WT.scenarios.exportBundle(null, { exportedAt: new Date().toISOString() });
+    downloadFile("warehousetwin-scenarios.json", json, "application/json");
+    toast("Exported " + items.length + " scenario" + (items.length === 1 ? "" : "s") + " (warehousetwin-scenarios.json — offline, nothing uploaded).");
+  }
+
+  function scenarioImportBundle(file) {
+    if (!WT.scenarios) return;
+    readFileText(file)
+      .then((text) => {
+        const res = WT.scenarios.importBundle(text);
+        if (!res.ok) { toast("Import failed: " + (res.error || "not a scenarios bundle") + ".", "err"); return; }
+        refreshScenarioList();
+        toast("Imported " + res.imported + " scenario" + (res.imported === 1 ? "" : "s") + (res.skipped ? " (" + res.skipped + " skipped)" : "") + " into this browser.");
+      })
+      .catch(() => toast("Could not read the file.", "err"));
+  }
+
+  function wireScenarios() {
+    if (!$("scenarioSaveBtn")) return;
+    $("scenarioSaveBtn").addEventListener("click", scenarioSaveCurrent);
+    $("scenarioName").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); scenarioSaveCurrent(); } });
+    $("scenarioLoadBtn").addEventListener("click", scenarioLoadSelected);
+    $("scenarioRenameBtn").addEventListener("click", scenarioRenameSelected);
+    $("scenarioDeleteBtn").addEventListener("click", scenarioDeleteSelected);
+    $("scenarioExportBtn").addEventListener("click", scenarioExportBundle);
+    $("scenarioImportBtn").addEventListener("click", () => $("scenarioImportInput").click());
+    $("scenarioImportInput").addEventListener("change", (e) => { if (e.target.files[0]) scenarioImportBundle(e.target.files[0]); e.target.value = ""; });
+    refreshScenarioList();
+  }
+
   // ---- Shareable layout links (the URL fragment IS the data) -------
   // Encoding (share.js): the exact serialize() schema, minus the save
   // timestamp -> JSON -> UTF-8 -> base64url, placed in location.hash
@@ -4963,6 +5117,8 @@
     $("shareBtn").addEventListener("click", shareLayout);
     $("importBtn").addEventListener("click", () => $("importInput").click());
     $("importInput").addEventListener("change", (e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; });
+    // v1.1: the user's OWN saved scenarios (scenarios.js -> WT.scenarios).
+    if (WT.scenarios) wireScenarios();
     $("clearBtn").addEventListener("click", () => {
       if (!state.elements.length) return;
       state.elements = [];

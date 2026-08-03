@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v29"; // v1.0 consolidation: collapsible side-panel cards (cards.js -> WT.cards, a pure/guarded collapse-state helper; app.js wires each .card-title header as a toggle, DEFAULT all-expanded so first load is unchanged; state persists in localStorage) + product-level README overhaul + CHANGELOG. New verify_ui.js harness (cards/app/index/styles/sw changed)
+const CACHE_VERSION = "wt-v30"; // v1.1 usability: save/load NAMED scenarios (scenarios.js -> WT.scenarios, a pure/guarded on-device store; app.js adds a compact "My scenarios" control that saves the current serialize() snapshot under a name and loads it back through the SAME deserialize() loader as JSON import; export/import a JSON backup bundle). New verify_scenarios.js harness (scenarios/app/index/sw changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -38,6 +38,7 @@ const APP_SHELL = [
   "./report.js",
   "./demo.js",
   "./cards.js",
+  "./scenarios.js",
   "./app.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",

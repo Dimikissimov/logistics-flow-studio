@@ -39,6 +39,7 @@ Single-page, no-build, no-framework — hand-written HTML, CSS and vanilla JavaS
 - **Consolidated WMS Report** (`report.js`): one printable/exportable report that aggregates every layer — layout, compliance, WMS ops KPIs, storage, automation, data profile and the standards basis — into a single stakeholder artifact. Every number is pulled from the owning module (never recomputed) so the report cannot drift from the app. Print (self-contained offline HTML), JSON and CSV.
 - **Export to BIM (IFC)** (`ifc.js`): a dependency-free, scoped IFC4 (STEP) export — elements as proxy solids for coordination/viewing — generated locally and openable in free IFC viewers.
 - **Save / load / share**: layouts persist in your browser and export/import as plain JSON. A **Share layout link** carries the whole design inside its `#layout=…` URL fragment (base64url JSON) — the link *is* the data; nothing is uploaded and no server is involved.
+- **My scenarios** (`scenarios.js`): save the plants **you** build under a **name**, then reload, rename or delete them, and export/import a JSON backup bundle. Saved **only on this device** (browser `localStorage`, guarded so it degrades safely) — nothing is uploaded, and these are your own work, distinct from the read-only synthetic examples. Loading a scenario runs through the **same loader as JSON import**, and a saved scenario optionally carries your imported SKU/order data so the plant comes back with its data.
 
 ### Demo
 - **Guided demo + About** (`demo.js`): a one-click guided tour that sequences the existing features end-to-end — load a synthetic scenario → run WMS ops → play the material-flow animation → surface the live KPIs → offer the WMS Report — with an interruptible step HUD, plus a concise, honest "About / why this" panel. The demo re-implements nothing; it drives the same functions the manual controls call.
@@ -80,7 +81,7 @@ Every documented behaviour is backed by a headless harness (no stubs). Run them 
 node test/run-all.mjs
 ```
 
-**23 harnesses** cover the simulation baselines, the share-link codec, CSV import, IFC export, the Compliance Check, the generator, the example library, the WMS/automation/flow/KPI/storage/report layers, the standards knowledge base, the guided-demo plan, the collapsible-cards helper, and an offline guard that asserts the app references no external assets. Everything is deterministic and ASCII-only; exit code 0 means all green.
+**24 harnesses** cover the simulation baselines, the share-link codec, CSV import, IFC export, the Compliance Check, the generator, the example library, the WMS/automation/flow/KPI/storage/report layers, the standards knowledge base, the guided-demo plan, the collapsible-cards helper, the saved-scenarios store, and an offline guard that asserts the app references no external assets. Everything is deterministic and ASCII-only; exit code 0 means all green.
 
 ## Licence
 

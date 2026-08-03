@@ -178,6 +178,21 @@
  *      sw.js precaches ./cards.js, and app.js wires the cards GENERICALLY.
  *      The runtime DOM affordance is added by app.js and not headless-testable;
  *      the pure helper + shipped-source guarantees behind it are covered here.
+ *  24. verify_scenarios.js - Save / load NAMED scenarios (v1.1): WT.scenarios
+ *      is a PURE, localStorage-GUARDED store (no-op in Node -> default empty)
+ *      for the user's OWN saved plants. Asserts the API surface, save->list->
+ *      load round-tripping the serialize() snapshot DEEP-EQUAL (loading
+ *      reconstructs the same layout+config), the list summary (element count/
+ *      floor/savedAt), unique-BY-SLUG saves updating in place, rename (with a
+ *      collision throw) + remove, exportBundle->importBundle round-tripping
+ *      into a FRESH store, DETERMINISTIC sorted-key bytes (import->re-export
+ *      stable), and honest validation (malformed bundles rejected without
+ *      mutating the store, junk entries skipped, save() rejecting bad input).
+ *      Plus shipped-source guards: index.html loads scenarios.js before app.js
+ *      with the on-device honesty label, sw.js precaches it at wt-v30, and
+ *      app.js loads a scenario through the SAME deserialize() as JSON import.
+ *      The DOM control is added by app.js and not headless-testable; the pure
+ *      store + shipped-source guarantees behind it are covered here.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -211,6 +226,7 @@ const HARNESSES = [
   { name: "Consolidated WMS Report (verify_report.js)", args: ["verify_report.js"] },
   { name: "Guided demo plan + About copy (verify_demo.js)", args: ["verify_demo.js"] },
   { name: "Collapsible side-panel cards (verify_ui.js)", args: ["verify_ui.js"] },
+  { name: "Save / load named scenarios (verify_scenarios.js)", args: ["verify_scenarios.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

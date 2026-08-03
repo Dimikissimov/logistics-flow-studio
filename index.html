@@ -176,6 +176,37 @@
         <input id="importInput" type="file" accept="application/json,.json" hidden />
       </section>
 
+      <!-- v1.1: Save / load NAMED scenarios. A compact control for the
+           user's OWN saved plants (layout + configuration, and the imported
+           SKU/order data when present) - distinct from the read-only
+           synthetic example scenarios above. Stored ON THIS DEVICE only
+           (browser localStorage); nothing is uploaded. Loading reuses the
+           SAME loader as JSON import (deserialize). Store: scenarios.js. -->
+      <section class="card" id="scenariosCard">
+        <h2 class="card-title">My scenarios</h2>
+        <p class="hint">Save the plants <strong>you</strong> build under a name, then reload, rename or delete them. Saved <strong>only on this device</strong> (your browser) — <strong>nothing is uploaded</strong>. These are your own work, separate from the read-only example scenarios above. <em>Export bundle</em> makes a JSON backup you can move between devices.</p>
+        <div class="field">
+          <label for="scenarioName">Name this scenario</label>
+          <input id="scenarioName" type="text" maxlength="60" placeholder="e.g. My cross-dock v2" autocomplete="off" />
+        </div>
+        <button id="scenarioSaveBtn" class="btn primary wide" type="button" title="Save the current layout + configuration (and your imported data, if any) under this name — on this device only, nothing uploaded">Save current as…</button>
+        <div class="field" style="margin-top:10px">
+          <label for="scenarioSelect">Saved scenarios</label>
+          <select id="scenarioSelect" aria-label="Your saved scenarios"></select>
+        </div>
+        <div class="btn-grid">
+          <button id="scenarioLoadBtn" class="btn primary" type="button" disabled title="Load the selected scenario onto the floor (same loader as JSON import)">Load</button>
+          <button id="scenarioRenameBtn" class="btn" type="button" disabled title="Rename the selected scenario">Rename</button>
+          <button id="scenarioDeleteBtn" class="btn danger" type="button" disabled title="Delete the selected scenario from this browser">Delete</button>
+        </div>
+        <div class="btn-grid" style="margin-top:8px">
+          <button id="scenarioExportBtn" class="btn" type="button" disabled title="Download all your saved scenarios as one JSON backup bundle (offline, nothing uploaded)">Export bundle</button>
+          <button id="scenarioImportBtn" class="btn" type="button" title="Merge saved scenarios from a backup bundle JSON (tolerant + validated)">Import bundle</button>
+        </div>
+        <p id="scenarioEmpty" class="hint">No saved scenarios yet — build a layout, type a name, then <strong>Save current as…</strong></p>
+        <input id="scenarioImportInput" type="file" accept="application/json,.json" hidden />
+      </section>
+
       <!-- W3: bring your own data (CSV import). Full-tier feature: the
            demo shows it locked with the padlock + unlock hint (never
            hidden). Parsing runs in the browser via FileReader - the
@@ -685,6 +716,7 @@
   <script src="report.js"></script>
   <script src="demo.js"></script>
   <script src="cards.js"></script>
+  <script src="scenarios.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -6,6 +6,29 @@ seeded teaching heuristic unless you import your own data** — informed by publ
 standards (ISO 22400, DIN 15185, ASR, EN, VDI), not a certification and not a
 measurement of a real site.
 
+## [1.1.0] — 2026-08-03
+
+### Added
+- **Save / load named scenarios.** A compact **"My scenarios"** control (near
+  the Layout Save/Export buttons) lets you save the plants **you** build under a
+  **name**, then reload, rename or delete them, and **export/import** a JSON
+  backup bundle to move them between devices. Saving captures the same
+  `serialize()` layout + configuration used by JSON export and share links (and,
+  when a real-data bundle is loaded, your imported SKU/order data rides along);
+  loading applies it through the **same `deserialize()` loader as JSON import**.
+  These are your **own saved work**, stored **only on this device** (browser
+  `localStorage`) — nothing is uploaded — and are kept distinct from the
+  read-only synthetic example scenarios. Saving under an existing name updates
+  that scenario in place. The pure, storage-guarded store lives in
+  `scenarios.js` (`WT.scenarios`) with deterministic, sorted-key serialization
+  (a bundle round-trips exactly), covered by the new `verify_scenarios.js`
+  harness.
+
+### Engineering
+- 24 headless verification harnesses via `node test/run-all.mjs` (the new
+  `verify_scenarios.js` added). Service-worker cache bumped to `wt-v30`
+  (precaching `scenarios.js`).
+
 ## [1.0.0] — 2026-08-03
 
 First consolidated product release. WarehouseTwin is an offline, browser-based
