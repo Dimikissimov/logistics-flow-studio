@@ -807,3 +807,28 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
   white-space: nowrap;
 }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+/* P3: Live material-flow controls */
+.flow-controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.flow-controls .btn { flex: 1 1 auto; }
+.hint-inline { color: var(--text-dim); font-weight: 600; font-size: 0.72rem; }
+.flow-readout { margin-top: 8px; }
+.flow-readout .empty { color: var(--text-dim); font-size: 0.8rem; }
+.flow-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.flow-chip {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+.flow-chip strong { font-variant-numeric: tabular-nums; }
+.flow-chip.flow-receiving { border-color: color-mix(in srgb, #2563eb 55%, var(--border)); }
+.flow-chip.flow-storage { border-color: color-mix(in srgb, #9333ea 55%, var(--border)); }
+.flow-chip.flow-picking { border-color: color-mix(in srgb, #d97706 55%, var(--border)); }
+.flow-chip.flow-packing { border-color: color-mix(in srgb, #0d9488 55%, var(--border)); }
+.flow-chip.flow-shipping { border-color: color-mix(in srgb, #16a34a 55%, var(--border)); }
+.flow-stats { font-size: 0.75rem; color: var(--text-dim); margin: 0; line-height: 1.5; }
+.flow-stats strong { color: var(--text); font-variant-numeric: tabular-nums; }

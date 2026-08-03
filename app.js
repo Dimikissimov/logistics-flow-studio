@@ -75,6 +75,11 @@
     genMode: "auto", // "auto" | "guided" | "reserve"
     genLayout: null, // last generated { elements, config, meta } (steering context)
     genLog: [], // explainable action log entries {kind, echo, detail}
+    // P3: Live material-flow animation (flowsim.js). `sim` is the current
+    // flowsim state; `on` gates whether MUs are drawn; `playing` gates the
+    // requestAnimationFrame loop; `sig` is the layout signature the sim was
+    // built for (rebuilt when the layout/seed changes).
+    flow: { on: false, playing: false, speed: 1, sim: null, raf: null, sig: null },
   };
 
   // ---------------- DOM refs ----------------
@@ -89,8 +94,10 @@
   function themeColors() {
     const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     return dark
-      ? { bg: "#0e1626", void: "#080d17", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171", heat: "#fb923c" }
-      : { bg: "#ffffff", void: "#eef2f7", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626", heat: "#c2410c" };
+      ? { bg: "#0e1626", void: "#080d17", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171", heat: "#fb923c",
+          flowStages: { receiving: "#60a5fa", storage: "#c084fc", picking: "#fbbf24", packing: "#2dd4bf", shipping: "#4ade80" } }
+      : { bg: "#ffffff", void: "#eef2f7", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626", heat: "#c2410c",
+          flowStages: { receiving: "#2563eb", storage: "#9333ea", picking: "#d97706", packing: "#0d9488", shipping: "#16a34a" } };
   }
   let COLORS = themeColors();
 
@@ -366,12 +373,20 @@
     // (world-anchored, so still inside the zoom/pan transform).
     drawCalibMarkers();
 
+    // P3: live material-flow MUs (animated boxes). Drawn in WORLD space,
+    // inside the same transform as every other overlay, so zoom / pan /
+    // Fit all apply and the boxes stay glued to the floor.
+    if (state.flow && state.flow.on) drawFlowMUs();
+
     // 3) Leave WORLD space back to screen CSS pixels.
     ctx.restore();
 
     // heatmap legend: a fixed-size UI chip pinned to the viewport corner
     // (screen space, so it never scales or drifts with zoom/pan).
     if (state.showHeat) drawHeatLegend();
+
+    // P3: live material-flow legend (screen space, pinned to the corner).
+    if (state.flow && state.flow.on) drawFlowLegend();
 
     updateBadges(viol, chains);
   }
@@ -516,6 +531,220 @@
           (state.resultStale ? " Stale: layout/settings changed since — Run again." : "")
         : "Heatmap on — Run the simulation to see where the pickers walk."
     );
+  }
+
+  /* ==================================================================
+   * P3: LIVE MATERIAL FLOW (flowsim.js) — an animated view of boxes /
+   * handling units (MUs) moving through the warehouse over time. The
+   * pure, deterministic model lives in flowsim.js; here we just drive it
+   * from the existing render loop and DRAW the MUs inside the same world
+   * transform as every other overlay (so zoom/pan/Fit all apply).
+   *
+   * HONEST: this is a SYNTHETIC teaching animation — straight-segment
+   * waypoint routing between zone centroids, with spawn/completion rate
+   * and travel speed from the documented wms.js heuristic. It is NOT a
+   * real discrete-event-simulation engine and NOT a measurement.
+   * ================================================================== */
+  const FLOW_BASE_DT = 1; // sim ticks advanced per animation frame at speed 1
+  const FLOW_STEP_TICKS = 8; // ticks advanced by a single "Step" press
+
+  // Draw the live MUs as small rounded boxes, colour-coded by stage.
+  // World-space math (world cell * cellPx) so the transform scales them.
+  function drawFlowMUs() {
+    const s = state.flow.sim;
+    if (!s || !s.mus || !s.mus.length) return;
+    const colors = COLORS.flowStages || {};
+    const size = Math.max(3.2, cellPx * 0.5); // world px (transform scales it)
+    const half = size / 2;
+    const r = Math.min(3, size * 0.28);
+    ctx.save();
+    ctx.lineWidth = 1;
+    for (const mu of s.mus) {
+      const px = mu.cx * cellPx, py = mu.cy * cellPx;
+      roundRect(px - half, py - half, size, size, r);
+      ctx.fillStyle = colors[mu.stage] || COLORS.flow;
+      ctx.globalAlpha = mu.stage === "shipping" ? 0.98 : 0.9;
+      ctx.fill();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = COLORS.text;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // A small live legend/counter pinned to the viewport corner (screen
+  // space, so it never scales or drifts with zoom/pan).
+  function drawFlowLegend() {
+    const s = state.flow.sim;
+    if (!s || !WT.flowsim) return;
+    const stages = WT.flowsim.STAGES;
+    const colors = COLORS.flowStages || {};
+    const pad = 8, sw = 10, rowH = 15, w = 190;
+    const h = 22 + stages.length * rowH + 18;
+    const x0 = 8, y0 = viewCssH - h - 8;
+    ctx.save();
+    ctx.globalAlpha = 0.94;
+    ctx.fillStyle = COLORS.bg;
+    roundRect(x0, y0, w, h, 8);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = COLORS.gridStrong;
+    roundRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1, 8);
+    ctx.stroke();
+    ctx.textBaseline = "top";
+    ctx.font = "600 10px system-ui, sans-serif";
+    ctx.fillStyle = COLORS.text;
+    ctx.fillText("Live material flow (SYNTHETIC)", x0 + pad, y0 + 6);
+    let y = y0 + 22;
+    for (const st of stages) {
+      ctx.fillStyle = colors[st] || COLORS.flow;
+      roundRect(x0 + pad, y + 1, sw, sw, 2);
+      ctx.fill();
+      ctx.fillStyle = COLORS.text;
+      ctx.font = "500 10px system-ui, sans-serif";
+      ctx.textBaseline = "top";
+      ctx.fillText(st.charAt(0).toUpperCase() + st.slice(1), x0 + pad + sw + 6, y);
+      ctx.fillStyle = COLORS.dim;
+      ctx.textAlign = "right";
+      ctx.fillText(String((s.perStage && s.perStage[st]) || 0), x0 + w - pad, y);
+      ctx.textAlign = "left";
+      y += rowH;
+    }
+    ctx.fillStyle = COLORS.dim;
+    ctx.font = "500 9px system-ui, sans-serif";
+    ctx.fillText("in-flight " + s.inflight + " · shipped " + s.completed, x0 + pad, y + 2);
+    ctx.restore();
+  }
+
+  // A cheap layout signature: rebuild the flow sim when the floor, the
+  // elements or the seed change so the waypoints track the current layout.
+  function flowSignature() {
+    let sig = GRID_W + "x" + GRID_H + "|s" + state.config.seed + "|";
+    for (const e of state.elements) sig += e.type + e.x + "," + e.y + "," + e.w + "," + e.d + ";";
+    return sig;
+  }
+
+  function flowBuild() {
+    if (!WT.flowsim) return false;
+    readConfigFromUI();
+    const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
+    const layout = Object.assign(currentLayout(), { config: state.config });
+    state.flow.sim = WT.flowsim.state(layout, { seed: seed, loop: true });
+    state.flow.sig = flowSignature();
+    return true;
+  }
+
+  // Ensure the sim exists and matches the current layout; rebuild if not.
+  function flowEnsureFresh() {
+    if (!state.flow.sim || state.flow.sig !== flowSignature()) return flowBuild();
+    return true;
+  }
+
+  function flowStop() {
+    state.flow.playing = false;
+    if (state.flow.raf) { cancelAnimationFrame(state.flow.raf); state.flow.raf = null; }
+  }
+
+  // The requestAnimationFrame loop: advance the model, then reuse the
+  // existing render() (no competing draw loop) and refresh the readout.
+  function flowFrame() {
+    if (!state.flow.playing) return;
+    // If the layout changed mid-play (loaded an example, generated, resized,
+    // edited an element), rebuild so the boxes track the current floor.
+    if (!state.flow.sim || state.flow.sig !== flowSignature()) flowBuild();
+    if (state.flow.sim) WT.flowsim.step(state.flow.sim, Math.max(0.05, state.flow.speed) * FLOW_BASE_DT);
+    render();
+    updateFlowReadout();
+    state.flow.raf = requestAnimationFrame(flowFrame);
+  }
+
+  function flowPlay() {
+    if (!WT.flowsim) { toast("Live material flow needs flowsim.js.", "warn"); return; }
+    if (!flowEnsureFresh()) return;
+    state.flow.on = true;
+    if (state.flow.playing) return;
+    state.flow.playing = true;
+    updateFlowButtons();
+    state.flow.raf = requestAnimationFrame(flowFrame);
+    status("Live material flow: playing — SYNTHETIC animation (not a real DES engine, not a measurement).");
+  }
+
+  // Pause returns to the NORMAL edit view: stop the loop and hide the MUs
+  // (the sim is retained so Play resumes exactly where it left off).
+  function flowPause() {
+    flowStop();
+    state.flow.on = false;
+    updateFlowButtons();
+    render();
+    updateFlowReadout();
+    status("Live material flow: paused — back to the normal edit view.");
+  }
+
+  function flowStep() {
+    if (!WT.flowsim) return;
+    flowStop();
+    if (!flowEnsureFresh()) return;
+    state.flow.on = true;
+    WT.flowsim.step(state.flow.sim, FLOW_STEP_TICKS);
+    updateFlowButtons();
+    render();
+    updateFlowReadout();
+    status("Live material flow: stepped forward one bucket.");
+  }
+
+  function flowReset() {
+    flowStop();
+    if (!flowBuild()) return;
+    state.flow.on = true;
+    updateFlowButtons();
+    render();
+    updateFlowReadout();
+    status("Live material flow: reset to the start (tick 0). Press Play to fill the floor.");
+  }
+
+  function updateFlowButtons() {
+    const play = $("flowPlayBtn"), pause = $("flowPauseBtn");
+    if (play) play.classList.toggle("active", state.flow.playing);
+    if (pause) pause.disabled = !state.flow.playing;
+  }
+
+  function updateFlowReadout() {
+    const out = $("flowReadout");
+    if (!out || !WT.flowsim) return;
+    const s = state.flow.sim;
+    if (!s) {
+      out.innerHTML = '<p class="empty">Press Play (or Step) to animate boxes moving through the warehouse. Pause returns to the normal edit view.</p>';
+      return;
+    }
+    const chips = WT.flowsim.STAGES.map((st) => {
+      const n = (s.perStage && s.perStage[st]) || 0;
+      const label = st.charAt(0).toUpperCase() + st.slice(1);
+      return '<span class="flow-chip flow-' + st + '">' + label + ' <strong>' + n + "</strong></span>";
+    }).join("");
+    out.innerHTML =
+      '<div class="flow-chips">' + chips + "</div>" +
+      '<p class="flow-stats">In-flight <strong>' + s.inflight + "</strong> · Shipped <strong>" + s.completed +
+      "</strong> · tick " + s.tick + " · bottleneck throughput ~" + s.plan.lineThroughput.toFixed(0) + " units/hr" +
+      (state.flow.playing ? "" : " · paused") + "</p>";
+  }
+
+  function wireFlowControls() {
+    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+    on("flowPlayBtn", flowPlay);
+    on("flowPauseBtn", flowPause);
+    on("flowStepBtn", flowStep);
+    on("flowResetBtn", flowReset);
+    const sp = $("flowSpeed");
+    if (sp) {
+      sp.addEventListener("input", () => {
+        state.flow.speed = Math.max(0.25, Number(sp.value) || 1);
+        const v = $("flowSpeedVal");
+        if (v) v.textContent = (Number.isInteger(state.flow.speed) ? state.flow.speed.toFixed(0) : String(state.flow.speed)) + "×";
+      });
+    }
+    updateFlowButtons();
   }
 
   /* ------------------------------------------------------------------
@@ -3397,6 +3626,7 @@
     $("adviseBtn").addEventListener("click", runAdvisor);
     $("complBtn").addEventListener("click", runCompliance);
     $("wmsBtn").addEventListener("click", runWmsOps);
+    wireFlowControls();
     $("optimizeBtn").addEventListener("click", runOptimize);
     $("compareBtn").addEventListener("click", runCompare);
     $("helpBtn").addEventListener("click", () => { $("onboard").hidden = false; });

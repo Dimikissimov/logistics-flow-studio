@@ -338,6 +338,30 @@
         <div id="wmsOut" class="wms-out"><p class="empty">Run to see the 7-stage flow (per-stage throughput, load and backlog), the warehouse KPI summary and the bottleneck stage in plain language.</p></div>
       </section>
 
+      <!-- P3: Live material flow — an animated view of boxes / handling
+           units moving through the warehouse over time. Pure model lives
+           in flowsim.js; the boxes are drawn on the canvas inside the same
+           world transform as every other overlay (zoom/pan/Fit all apply). -->
+      <section class="card" id="flowCard">
+        <h2 class="card-title">Live material flow</h2>
+        <div class="wms-disclaimer">
+          <strong>SYNTHETIC animation — a transparent teaching model, NOT a real discrete-event-simulation engine, NOT a measurement and NOT a certification.</strong>
+          Boxes follow <em>straight-segment waypoint routing</em> between zone centroids (there is no queueing, congestion or pathfinding). Spawn/completion rate and travel speed follow the documented <code>wms.js</code> throughput heuristic.
+        </div>
+        <p class="hint">Watch handling units (MUs) flow through the <strong>current layout</strong> along the spine <strong>receiving → storage → picking → packing → shipping</strong>, using dock, storage, pick-face and pack centroids (and a conveyor/RGV/AGV spine where present) as waypoints. More docks/automation → the bottleneck stage (via WMS) lifts, so units spawn faster and move quicker. Seed comes from the Simulation panel — same layout + seed → identical animation.</p>
+        <div class="flow-controls" role="group" aria-label="Live material-flow playback">
+          <button id="flowPlayBtn" class="btn primary" type="button">▶ Play</button>
+          <button id="flowPauseBtn" class="btn" type="button">❚❚ Pause</button>
+          <button id="flowStepBtn" class="btn" type="button">Step</button>
+          <button id="flowResetBtn" class="btn" type="button">Reset</button>
+        </div>
+        <div class="field">
+          <label for="flowSpeed">Speed <span id="flowSpeedVal" class="hint-inline">1×</span></label>
+          <input id="flowSpeed" type="range" min="0.25" max="4" step="0.25" value="1" aria-label="Animation speed multiplier" />
+        </div>
+        <div id="flowReadout" class="flow-readout"><p class="empty">Press Play (or Step) to animate boxes moving through the warehouse. Pause returns to the normal edit view.</p></div>
+      </section>
+
       <!-- P3: unit-load catalog (pallets, cartons, totes) -->
       <section class="card">
         <details id="catalogDetails">
@@ -468,6 +492,7 @@
   <script src="ifc.js"></script>
   <script src="data.js"></script>
   <script src="wms.js"></script>
+  <script src="flowsim.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
