@@ -291,10 +291,28 @@
       centroidOf(els, (e) => e.type === "dock-in") ||
       zoneCentre(layout, "receiving") ||
       { x: gridW / 2, y: 1 };
-    const storage =
+    let storage =
       centroidOf(els, isStorage) ||
       zoneCentre(layout, "storage") ||
       { x: gridW / 2, y: gridH * 0.4 };
+    // P4 retrieval: when a physical storage ASSIGNMENT rides on the layout
+    // (WT.storage), the storage waypoint moves from the geometric centroid
+    // of all racking to the velocity-weighted centroid of the ACTUAL slot
+    // placements (fast movers pull it toward the golden zone), so the
+    // storage->picking retrieval leg reflects real slotting. With no
+    // assignment this whole block is skipped and behaviour is byte-
+    // identical to before (guarded by verify_storage.js + verify_flowsim.js).
+    let retrievalAnchored = false;
+    const asg = layout && layout.storageAssignment;
+    if (asg && WT.storage && typeof WT.storage.retrievalAnchor === "function") {
+      try {
+        const anchor = WT.storage.retrievalAnchor(asg);
+        if (anchor && isFinite(anchor.x) && isFinite(anchor.y)) {
+          storage = { x: anchor.x, y: anchor.y };
+          retrievalAnchored = true;
+        }
+      } catch (_) { /* defensive: keep the plain centroid */ }
+    }
     const packing =
       centroidOf(els, (e) => e.type === "pack-station") ||
       zoneCentre(layout, "packing") ||
@@ -340,6 +358,7 @@
       return { x: c.x, y: c.y, stage: p.stage, onConveyor: !!p.onConveyor };
     });
     out.conveyorRouted = routed; // non-enumerable-ish flag (array property)
+    out.retrievalAnchored = retrievalAnchored; // P4: storage waypoint = real slotting anchor
     return out;
   }
 

@@ -389,6 +389,32 @@
         <div id="wmsOut" class="wms-out"><p class="empty">Run to see the 7-stage flow (per-stage throughput, load and backlog), the warehouse KPI summary and the bottleneck stage in plain language.</p></div>
       </section>
 
+      <!-- P4: Storage & inventory — connect the SKU master to PHYSICAL
+           storage locations. Slot SKUs into the racking by ABC / velocity
+           (fast movers into the golden zone near the docks), track
+           occupancy + overflow, and expose a retrieval location the live
+           material-flow leg uses. Pure model in storage.js (WT.storage);
+           with nothing assigned the flow is byte-identical to before. -->
+      <section class="card" id="storageCard">
+        <h2 class="card-title">Storage &amp; inventory</h2>
+        <div class="wms-disclaimer">
+          <strong>SYNTHETIC slotting — the transparent ABC / velocity HEURISTIC, NOT a measurement, NOT an optimisation proof and NOT a certification.</strong>
+          One SKU occupies one location (a documented simplification); demand beyond physical capacity is reported as <strong>overflow</strong>, never silently dropped. With a SKU master imported it is <strong>your own data</strong> and stays on this device.
+        </div>
+        <p class="hint">Slot the <strong>SKU master</strong> (from the <em>SKU &amp; order data</em> panel, or a synthetic catalogue derived from the Simulation inputs) into the physical locations of the placed racking — fast movers into the <strong>golden zone</strong> nearest the docks / pick face. Occupancy, placement quality and a retrieval location come out; the <strong>Live material flow</strong> retrieval leg then starts from the real placement anchor. Same layout + SKU master + strategy + seed → identical slotting.</p>
+        <div class="field">
+          <label for="storageStrategy">Slotting strategy</label>
+          <select id="storageStrategy"></select>
+        </div>
+        <div class="btn-grid">
+          <button id="storageAssignBtn" class="btn primary" type="button"
+                  title="Slot the SKU master into the racking's physical locations by the chosen strategy (deterministic)">Assign to storage</button>
+          <button id="storageOverlayBtn" class="btn" type="button" aria-pressed="false"
+                  title="Shade each rack on the canvas by its fill % (green &lt; 70, amber &lt; 90, red = near full). Drawn in the world transform — zoom/pan safe.">Occupancy overlay</button>
+        </div>
+        <div id="storageOut" class="storage-out"><p class="empty">No slotting yet — click <strong>Assign to storage</strong> to place the SKU master into the racking’s physical locations by ABC / velocity (fast movers into the golden zone near the docks).</p></div>
+      </section>
+
       <!-- P3: Live material flow — an animated view of boxes / handling
            units moving through the warehouse over time. Pure model lives
            in flowsim.js; the boxes are drawn on the canvas inside the same
@@ -556,6 +582,7 @@
   <script src="kpicharts.js"></script>
   <script src="wmsdata.js"></script>
   <script src="iso.js"></script>
+  <script src="storage.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

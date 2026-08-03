@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v23"; // 2.5D isometric presentation view (iso.js): view-mode toggle, extruded iso blocks, projected flow overlay (iso/app/index/styles changed)
+const CACHE_VERSION = "wt-v24"; // P4 storage & inventory (storage.js): physical locations, ABC slotting, occupancy + retrieval; flowsim retrieval leg; storage panel (storage/flowsim/app/index/styles changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -32,6 +32,7 @@ const APP_SHELL = [
   "./kpicharts.js",
   "./wmsdata.js",
   "./iso.js",
+  "./storage.js",
   "./app.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",

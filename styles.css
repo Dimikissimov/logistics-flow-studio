@@ -836,6 +836,20 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .wmsdata-stats .cat-table { margin-top: 4px; }
 .wmsdata-stats .cat-table.sample td:first-child { font-family: var(--mono); }
 
+/* P4: Storage & inventory panel (storage.js) */
+.storage-out { margin-top: 10px; }
+.storage-out .empty { color: var(--text-dim); font-size: 0.8rem; }
+.storage-quality { font-size: 0.76rem; margin: 8px 0; line-height: 1.4; }
+.storage-flag { font-size: 0.72rem; margin: 6px 0; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); line-height: 1.4; }
+.storage-flag.ok { color: var(--text-dim); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.storage-flag.warn { border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.storage-bars { display: flex; flex-direction: column; gap: 5px; margin-top: 3px; }
+.storage-bar-row { display: grid; grid-template-columns: 4.6em 1fr auto; align-items: center; gap: 6px; font-size: 0.7rem; }
+.storage-bar-row .zl { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.storage-bar-row .zbar { position: relative; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text-dim) 22%, transparent); overflow: hidden; }
+.storage-bar-row .zfill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; min-width: 2px; }
+.storage-bar-row .zv { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text-dim); white-space: nowrap; }
+
 /* P3: Live material-flow controls */
 .flow-controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
 .flow-controls .btn { flex: 1 1 auto; }

@@ -106,6 +106,16 @@
  *      non-mutating), the iso pure pipeline never mutates the layout (the
  *      view-mode toggle is a no-op on state), and the illustrative / NOT a
  *      BIM model honesty labels are present.
+ *  18. verify_storage.js     - storage & inventory (P4): physical storage
+ *      LOCATIONS derived from the racking (count == summed capacity), ABC /
+ *      velocity slotting into the golden zone (A-class average distance <
+ *      overall + ABC beats random), deterministic assignment, occupancy
+ *      maths (placed == min(SKUs, capacity)) with HONEST overflow when
+ *      demand exceeds capacity, locationOf/retrieve returning a valid in-
+ *      layout location (mirrors Siemens M_retrieveSKUfromStorage), the
+ *      flowsim retrieval leg moving the storage waypoint to the real
+ *      slotting anchor with a byte-identical no-assignment FALLBACK, and
+ *      the SYNTHETIC / heuristic / NOT a measurement honesty labels.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -133,6 +143,7 @@ const HARNESSES = [
   { name: "SKU master + order pool data layer (verify_wmsdata.js)", args: ["verify_wmsdata.js"] },
   { name: "Material-flow realism: stations/queues/conveyor (verify_flowB.js)", args: ["verify_flowB.js"] },
   { name: "2.5D isometric presentation projection (verify_iso.js)", args: ["verify_iso.js"] },
+  { name: "Storage & inventory: slotting/occupancy/retrieval (verify_storage.js)", args: ["verify_storage.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

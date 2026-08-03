@@ -75,6 +75,15 @@
     preview: null, // optimizer proposal: [{id,type,x,y,w,d}] shown as ghosts
     complianceHighlight: null, // element ids highlighted from a Compliance Check finding
     showHeat: false, // pick-traffic heatmap overlay toggle
+    // P4 storage & inventory (storage.js): the current physical slotting
+    // assignment (SKUs -> storage locations). `storageAssignmentSig` is the
+    // layout signature it was built for, so a stale assignment is never fed
+    // to the flowsim retrieval leg after the floor changes. `showOccupancy`
+    // toggles the fill-by-rack canvas overlay (drawn in the world transform).
+    storageAssignment: null,
+    storageAssignmentSig: null,
+    storageSource: "synthetic",
+    showOccupancy: false,
     panMode: false, // view hand/pan mode (toolbar toggle)
     // View mode: "top" = the accurate, EDITABLE top-down floor plan (the
     // source of truth); "iso" = the ILLUSTRATIVE 2.5D isometric
@@ -341,6 +350,11 @@
       }
       ctx.restore();
     }
+
+    // P4: storage occupancy overlay (fill-by-rack tank gauge). Drawn on
+    // top of the racks, inside the SAME world transform, so it is zoom/pan
+    // safe. Toggled from the Storage & inventory panel.
+    if (state.showOccupancy) drawStorageOccupancy();
 
     // P3: material-flow chain arrows + broken-chain markers
     const chains = D.analyzeChains(state.elements);
@@ -639,6 +653,211 @@
   }
 
   /* ==================================================================
+   * P4: STORAGE & INVENTORY (storage.js) — physical slotting, occupancy
+   * + retrieval. The pure model lives in storage.js; here we drive it and
+   * render the panel + an optional fill-by-rack overlay. Data is SYNTHETIC
+   * unless the SKU master was imported (then it is the user's own).
+   * ================================================================== */
+
+  // Build (or rebuild) the physical assignment for the CURRENT layout,
+  // slotting the loaded SKU master (or a synthetic one derived from the sim
+  // config when nothing is loaded) into storage locations by `strategy`.
+  function storageBuildAssignment(strategy) {
+    if (!WT.storage || !WT.wmsdata) return null;
+    readConfigFromUI();
+    const layout = currentLayout();
+    let master, source;
+    if (WT.wmsdata.isLoaded()) {
+      master = WT.wmsdata.skuMaster;
+      const b = state.wmsBundle || {};
+      source = b.source === "synthetic" && b.orderSource !== "imported" ? "synthetic" : "yours";
+    } else {
+      const nSku = Math.max(1, Math.round(Number(state.config.skuCount) || 80));
+      const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
+      const skew = Number(state.config.demandSkew) || 1;
+      master = WT.wmsdata.generateSkuMaster({ skuCount: nSku, seed: seed, demandSkew: skew });
+      source = "synthetic";
+    }
+    const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
+    const strat = strategy || state.config.strategy || "abc";
+    const asg = WT.storage.build(layout, master, { strategy: strat, seed: seed, source: source });
+    state.storageAssignment = asg;
+    state.storageAssignmentSig = flowSignature();
+    state.storageSource = source;
+    return asg;
+  }
+
+  // The panel button: (re)assign with the chosen strategy, then refresh the
+  // panel, the (retrieval-aware) flow sim and the canvas overlay.
+  function storageAssignAction() {
+    if (!WT.storage) { toast("Storage & inventory needs storage.js.", "warn"); return; }
+    const sel = $("storageStrategy");
+    const strat = (sel && sel.value) || state.config.strategy || "abc";
+    const asg = storageBuildAssignment(strat);
+    if (!asg) { toast("Could not build a slotting assignment.", "warn"); return; }
+    // The retrieval leg reads state.storageAssignment: force a flow rebuild.
+    state.flow.sig = null;
+    renderStoragePanel();
+    if (state.showOccupancy) render();
+    const st = WT.storage.stats(asg);
+    const srcTxt = state.storageSource === "yours" ? "your imported" : "a synthetic";
+    toast("Slotted " + fmtInt(st.placedCount) + " SKUs into " + fmtInt(st.capacityTotal) + " locations (" + strat + ").");
+    status(
+      "Storage slotting (" + strat + ", " + srcTxt + " SKU master): fill " + st.fillPct.toFixed(0) + "%, " +
+      "A-class avg " + st.placement.avgDistAClassM.toFixed(1) + " m vs floor avg " + st.placement.avgDistAllM.toFixed(1) + " m" +
+      (st.overflow ? " — OVERFLOW: " + fmtInt(st.unplacedCount) + " SKUs exceed capacity (reported, not dropped)." : ". The live material-flow retrieval leg now starts from the real placement anchor.")
+    );
+  }
+
+  // Clear the slotting when the underlying data resets (keeps the flowsim
+  // retrieval leg from anchoring to a stale assignment).
+  function storageClear() {
+    state.storageAssignment = null;
+    state.storageAssignmentSig = null;
+    if (WT.storage) WT.storage.clear();
+    state.flow.sig = null;
+    renderStoragePanel();
+    if (state.showOccupancy) render();
+  }
+
+  // Fill-by-rack tank-gauge overlay. For each storage element, draw a
+  // translucent bar rising from the bottom to its fill %, coloured green ->
+  // amber -> red as it approaches full. Drawn inside the world transform.
+  function drawStorageOccupancy() {
+    const asg = state.storageAssignment;
+    if (!asg || !WT.storage) return;
+    const occ = WT.storage.occupancy(asg);
+    if (!occ) return;
+    const byEl = {};
+    for (const r of occ.byRack) byEl[r.elId] = r;
+    for (const e of state.elements) {
+      const r = byEl[e.id];
+      if (!r) continue; // not a storage rack in this assignment
+      const px = e.x * cellPx, py = e.y * cellPx, pw = e.w * cellPx, ph = e.d * cellPx;
+      const frac = Math.max(0, Math.min(1, r.fillPct / 100));
+      const col = r.fillPct >= 90 ? "#ef4444" : r.fillPct >= 70 ? "#f59e0b" : "#22c55e";
+      ctx.save();
+      // gauge fill (rises from the bottom edge of the rack)
+      const barH = (ph - 6) * frac;
+      ctx.fillStyle = hexA(col, 0.34);
+      ctx.fillRect(px + 3, py + 3 + (ph - 6 - barH), pw - 6, barH);
+      // outline + % label when the rack is big enough to read
+      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = hexA(col, 0.9);
+      roundRect(px + 2.5, py + 2.5, pw - 5, ph - 5, 5);
+      ctx.stroke();
+      if (pw > 34 && ph > 20) {
+        ctx.fillStyle = COLORS.text;
+        ctx.font = "700 " + Math.max(9, Math.min(12, cellPx * 0.55)) + "px system-ui, sans-serif";
+        ctx.textBaseline = "bottom";
+        ctx.textAlign = "right";
+        ctx.fillText(Math.round(r.fillPct) + "%", px + pw - 6, py + ph - 5);
+        ctx.textAlign = "left";
+      }
+      ctx.restore();
+    }
+  }
+
+  function toggleOccupancy() {
+    if (!state.storageAssignment) storageBuildAssignment();
+    state.showOccupancy = !state.showOccupancy;
+    const b = $("storageOverlayBtn");
+    if (b) { b.classList.toggle("active", state.showOccupancy); b.setAttribute("aria-pressed", String(state.showOccupancy)); }
+    render();
+    status(state.showOccupancy
+      ? "Occupancy overlay on — racks shaded by fill % (green < 70, amber < 90, red = near full). Slotting is the transparent ABC/velocity heuristic."
+      : "Occupancy overlay off.");
+  }
+
+  // Render the Storage & inventory panel: occupancy %, ABC placement
+  // quality, fill by zone (storage type), overflow/unplaced — honest labels.
+  function renderStoragePanel() {
+    const box = $("storageOut");
+    if (!box || !WT.storage) return;
+    const asg = state.storageAssignment;
+    if (!asg) {
+      box.innerHTML = '<p class="empty">No slotting yet — click <strong>Assign to storage</strong> to place the SKU master into the racking’s physical locations by ABC / velocity (fast movers into the golden zone near the docks). With a SKU master imported it uses your data; otherwise a synthetic catalogue derived from the Simulation panel.</p>';
+      return;
+    }
+    const st = WT.storage.stats(asg);
+    const occ = st.occupancy;
+    const src = state.storageSource === "yours" ? "yours" : "synthetic";
+    const srcLine = src === "yours"
+      ? "<strong>SKU master: yours</strong> (imported, on this device) · slotting = the ABC / velocity <em>heuristic</em>, not measured"
+      : "<strong>SKU master: SYNTHETIC</strong> (seeded) · slotting = the ABC / velocity <em>heuristic</em>, not measured";
+
+    const kpi = (lbl, val, cls) => '<div class="k' + (cls ? " " + cls : "") + '"><span class="lbl">' + esc(lbl) + '</span><span class="val">' + esc(val) + "</span></div>";
+    const kpis =
+      '<div class="wmsdata-kpis storage-kpis">' +
+      kpi("Fill", occ.fillPct.toFixed(0) + "%") +
+      kpi("Placed", fmtInt(occ.placed) + " / " + fmtInt(occ.capacityTotal)) +
+      kpi("A-class avg", st.placement.avgDistAClassM.toFixed(1) + " m") +
+      kpi("Floor avg", st.placement.avgDistAllM.toFixed(1) + " m") +
+      "</div>";
+
+    // Placement quality: the golden-zone effect, stated plainly + honestly.
+    const closer = st.placement.avgDistAllM - st.placement.avgDistAClassM;
+    const quality =
+      '<p class="storage-quality">' +
+      (st.placement.goldenEffect
+        ? "Fast movers are <strong>" + closer.toFixed(1) + " m closer</strong> to the docks than the floor average, and <strong>" +
+          st.placement.aClassInGoldenPct.toFixed(0) + "% of A-class</strong> SKUs sit in the golden zone (closest " +
+          Math.round(st.golden.fraction * 100) + "% of locations)."
+        : "This strategy does <strong>not</strong> pull fast movers toward the docks (A-class avg " +
+          st.placement.avgDistAClassM.toFixed(1) + " m vs floor " + st.placement.avgDistAllM.toFixed(1) + " m) — pick ABC slotting for the golden-zone win.") +
+      "</p>";
+
+    // Overflow / stockout flags (honest — nothing is silently dropped).
+    let flags = "";
+    if (st.flags.overflow) {
+      flags += '<p class="storage-flag warn"><strong>OVERFLOW:</strong> ' + fmtInt(st.unplacedCount) +
+        " SKUs exceed the " + fmtInt(occ.capacityTotal) + " physical locations and could not be placed (the slowest movers, reported not dropped — add racking or reduce SKUs).</p>";
+    }
+    if (st.flags.goldenZoneOverflow) {
+      flags += '<p class="storage-flag warn">A-class SKUs (' + fmtInt(st.placement.aCount) + ") exceed the golden-zone capacity (" +
+        fmtInt(st.golden.count) + ") — some fast movers sit outside the closest locations.</p>";
+    }
+    if (!flags) flags = '<p class="storage-flag ok">All SKUs placed — no overflow.</p>';
+
+    // Fill by zone (storage type) — a small bar per type.
+    const types = Object.keys(occ.byType).sort((a, b) => occ.byType[b].placed - occ.byType[a].placed);
+    const barRows = types.map((t) => {
+      const z = occ.byType[t];
+      const pct = Math.round(z.fillPct);
+      const col = z.fillPct >= 90 ? "#ef4444" : z.fillPct >= 70 ? "#f59e0b" : "#22c55e";
+      return '<div class="storage-bar-row"><span class="zl">' + esc(z.label || t) + '</span>' +
+        '<span class="zbar"><span class="zfill" style="width:' + pct + "%;background:" + col + '"></span></span>' +
+        '<span class="zv">' + pct + "% (" + fmtInt(z.placed) + "/" + fmtInt(z.capacity) + ")</span></div>";
+    }).join("");
+    const byZone = '<p class="wmsdata-cap">Fill by storage type (zone):</p><div class="storage-bars">' + barRows + "</div>";
+
+    box.innerHTML =
+      '<div class="wmsdata-src ' + (src === "yours" ? "yours" : "synthetic") + '">' + srcLine + ".</div>" +
+      kpis + quality + flags + byZone;
+  }
+
+  function wireStoragePanel() {
+    if (!$("storageAssignBtn")) return;
+    // Populate the strategy select from the domain STRATEGIES set (reuse).
+    const sel = $("storageStrategy");
+    if (sel && D && D.STRATEGIES) {
+      sel.innerHTML = "";
+      for (const id of ["abc", "random", "zone", "batch", "wave"]) {
+        if (!D.STRATEGIES[id]) continue;
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = D.STRATEGIES[id].label;
+        sel.appendChild(opt);
+      }
+      sel.value = (state.config && state.config.strategy) || "abc";
+    }
+    $("storageAssignBtn").addEventListener("click", storageAssignAction);
+    const ob = $("storageOverlayBtn");
+    if (ob) ob.addEventListener("click", toggleOccupancy);
+    renderStoragePanel();
+  }
+
+  /* ==================================================================
    * P3: LIVE MATERIAL FLOW (flowsim.js) — an animated view of boxes /
    * handling units (MUs) moving through the warehouse over time. The
    * pure, deterministic model lives in flowsim.js; here we just drive it
@@ -807,6 +1026,13 @@
     readConfigFromUI();
     const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
     const layout = Object.assign(currentLayout(), { config: state.config });
+    // P4 retrieval: feed the animation the CURRENT physical slotting so the
+    // storage->picking leg starts from the real placement anchor. Only when
+    // the assignment was built for THIS layout (signature match) — a stale
+    // assignment is ignored, so the fallback stays byte-identical to before.
+    if (state.storageAssignment && state.storageAssignmentSig === flowSignature()) {
+      layout.storageAssignment = state.storageAssignment;
+    }
     const opts = { seed: seed, loop: true };
     // Real-data layer: feed the animation the loaded pool's real size + line
     // shape. With nothing loaded, opts is unchanged -> identical to before.
@@ -3669,6 +3895,7 @@
     state.wmsBundle = null;
     state.datasetKind = null;
     if (WT.wmsdata) WT.wmsdata.clear();
+    storageClear(); // the SKU master went away — drop any slotting
     pendingArtFile = null;
     pendingOrdFile = null;
     try { localStorage.removeItem(DATA_KEY); } catch (_) {}
@@ -3771,6 +3998,9 @@
     state.datasetKind = (bundle.source === "synthetic" && bundle.orderSource !== "imported") ? "generated" : "imported";
     clearWmsDataErrors();
     saveDataset();
+    // The SKU master changed — invalidate any physical slotting so the panel
+    // + the flowsim retrieval leg never show a stale assignment.
+    storageClear();
     updateDataUI();
     renderWmsData();
     markKPIsStale();
@@ -4280,6 +4510,7 @@
     wireButtons();
     wireDataPanel();
     wireWmsDataPanel();
+    wireStoragePanel();
     wireUnderlayPanel();
     loadDataset(); // W3: restore imported data + floor plan (their own keys)
     loadUnderlay();
