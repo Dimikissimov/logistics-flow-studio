@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v28"; // P8 commercial demo polish: one-click GUIDED DEMO (demo.js -> WT.demo) - a pure, deterministic step PLAN (loadExample -> runWmsOps -> playFlow -> live KPIs -> offer WMS Report) that app.js runs by SEQUENCING the SAME functions the manual controls call (no feature re-implemented); an interruptible step HUD; and a concise, HONEST "About / why this" panel rendered from WT.demo.ABOUT (offline / synthetic-unless-imported / not-a-certification, hype-free). New verify_demo.js harness (demo/app/index/styles/sw changed)
+const CACHE_VERSION = "wt-v29"; // v1.0 consolidation: collapsible side-panel cards (cards.js -> WT.cards, a pure/guarded collapse-state helper; app.js wires each .card-title header as a toggle, DEFAULT all-expanded so first load is unchanged; state persists in localStorage) + product-level README overhaul + CHANGELOG. New verify_ui.js harness (cards/app/index/styles/sw changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -37,6 +37,7 @@ const APP_SHELL = [
   "./storage.js",
   "./report.js",
   "./demo.js",
+  "./cards.js",
   "./app.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",

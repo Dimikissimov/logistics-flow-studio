@@ -5029,6 +5029,53 @@
     updateZoomBadge();
   }
 
+  // ---- v1.0 usability: collapsible side-panel cards ------------------
+  // Purely additive. Every side-panel card whose header is an
+  // <h2 class="card-title"> becomes collapsible: clicking the header (or
+  // pressing Enter/Space while it is focused) hides/shows that card's body.
+  // The collapsed-set persists via WT.cards (localStorage, guarded, no-op
+  // when storage is unavailable). DEFAULT = all expanded, so first load is
+  // identical to before. Native <details>-based cards (unit-load catalog,
+  // knowledge base, standards) collapse themselves and are left untouched.
+  // Applied GENERICALLY - no card is hand-wired; the header is the only
+  // toggle target, so buttons/inputs inside a card are never hijacked.
+  function initCollapsibleCards() {
+    if (!WT.cards || !document.querySelectorAll) return; // graceful: app still works
+    const collapse = WT.cards.create();
+    const cards = document.querySelectorAll("main.layout section.card");
+    cards.forEach((card) => {
+      const title = card.querySelector(":scope > .card-title");
+      if (!title) return; // <details>-based cards handle their own collapsing
+      // A stable key: prefer the card's id, else a slug of its title text.
+      const key = card.id || "card-" + WT.cards.slug(title.textContent || "");
+      title.classList.add("card-toggle");
+      title.setAttribute("role", "button");
+      title.setAttribute("tabindex", "0");
+      // A caret affordance pinned to the far end of the header.
+      const caret = document.createElement("span");
+      caret.className = "card-caret";
+      caret.setAttribute("aria-hidden", "true");
+      caret.textContent = "▾"; // down-pointing triangle; rotates when collapsed
+      title.appendChild(caret);
+
+      const apply = () => {
+        const collapsed = collapse.isCollapsed(key);
+        card.classList.toggle("card--collapsed", collapsed);
+        title.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      };
+      const toggle = () => { collapse.toggle(key); apply(); };
+      apply(); // restore any persisted collapse; default = expanded (no-op)
+
+      title.addEventListener("click", toggle);
+      title.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+          e.preventDefault();
+          toggle();
+        }
+      });
+    });
+  }
+
   function boot() {
     buildPalette();
     buildConfigControls();
@@ -5040,6 +5087,7 @@
     buildExamplesPanel();
     buildExampleQuickPick();
     buildAbout(); // P8: render the About / why-this copy from WT.demo.ABOUT
+    initCollapsibleCards(); // v1.0: make the side-panel cards collapsible (default expanded)
     wireButtons();
     wireDataPanel();
     wireWmsDataPanel();

@@ -166,6 +166,18 @@
  *      is HYPE-FREE (no "certified"/"guaranteed"/"best-in-class"/"best", no
  *      real brand). The button/HUD/modal are DOM and not headless-testable;
  *      the pure plan + copy behind them are fully covered here.
+ *  23. verify_ui.js        - Collapsible side-panel cards (v1.0): WT.cards is
+ *      a PURE, DOM-free collapse-state helper with a localStorage-GUARDED
+ *      backing (no-op in Node). Asserts the DEFAULT is all-expanded (empty
+ *      set, nothing ships collapsed), slug() is pure/deterministic, toggle/
+ *      set/clear behave, a collapse PERSISTS across a fresh set reading the
+ *      same store (survives a reload), the localStorage guard no-ops cleanly
+ *      while in-memory toggles still work, and only `true` ids ever count as
+ *      collapsed (no corrupt default). Plus source guards: index.html loads
+ *      cards.js before app.js and ships NO card--collapsed (default expanded),
+ *      sw.js precaches ./cards.js, and app.js wires the cards GENERICALLY.
+ *      The runtime DOM affordance is added by app.js and not headless-testable;
+ *      the pure helper + shipped-source guarantees behind it are covered here.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -198,6 +210,7 @@ const HARNESSES = [
   { name: "Automation systems modeling (verify_automation.js)", args: ["verify_automation.js"] },
   { name: "Consolidated WMS Report (verify_report.js)", args: ["verify_report.js"] },
   { name: "Guided demo plan + About copy (verify_demo.js)", args: ["verify_demo.js"] },
+  { name: "Collapsible side-panel cards (verify_ui.js)", args: ["verify_ui.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
