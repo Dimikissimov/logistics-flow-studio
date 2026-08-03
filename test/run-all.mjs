@@ -154,6 +154,18 @@
  *      it runs on an examples.js AND a generated layout; not-yet-run
  *      sections are MARKED (never thrown); and the SYNTHETIC / NOT measured
  *      / NOT a certification / ISO-DIN-VDI-informed honesty is restated.
+ *  22. verify_demo.js      - Guided demo plan + About copy (P8): WT.demo is a
+ *      PURE, DETERMINISTIC step plan - script() returns an ordered non-empty
+ *      list whose every action maps to a KNOWN capability (WT.demo.ACTIONS)
+ *      and every referenced example id EXISTS in WT.examples.library; steps
+ *      carry title+blurb; script() is byte-stable AND returns a fresh copy;
+ *      run() drives the actions in order through an injected controller and
+ *      is INTERRUPTIBLE (stops on request, fires onStop); and the About copy
+ *      (WT.demo.ABOUT) states the offline / synthetic-unless-imported /
+ *      not-a-certification facts, carries the generate->report pipeline, and
+ *      is HYPE-FREE (no "certified"/"guaranteed"/"best-in-class"/"best", no
+ *      real brand). The button/HUD/modal are DOM and not headless-testable;
+ *      the pure plan + copy behind them are fully covered here.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -185,6 +197,7 @@ const HARNESSES = [
   { name: "Editable standards knowledge base (verify_kb.js)", args: ["verify_kb.js"] },
   { name: "Automation systems modeling (verify_automation.js)", args: ["verify_automation.js"] },
   { name: "Consolidated WMS Report (verify_report.js)", args: ["verify_report.js"] },
+  { name: "Guided demo plan + About copy (verify_demo.js)", args: ["verify_demo.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

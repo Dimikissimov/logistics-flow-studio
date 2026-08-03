@@ -3966,6 +3966,124 @@
   }
 
   // ================================================================
+  // P8: GUIDED DEMO + ABOUT / WHY THIS
+  // ----------------------------------------------------------------
+  // The one-click guided demo runs the whole stack end-to-end by calling
+  // the SAME functions the manual controls call (loadExample, runWmsOps,
+  // flowPlay, the KPI-cockpit repaint, the WMS Report button) - it never
+  // re-implements a feature, it only SEQUENCES the declarative plan in
+  // WT.demo (demo.js). Interruptible; leaves the app in normal use after.
+  // ================================================================
+  let demoRunning = false;
+  let demoStopFlag = false;
+  let demoTimer = null;
+  let demoResolvePause = null;
+
+  function demoFocus(id) {
+    const el = $(id);
+    if (el && typeof el.scrollIntoView === "function") {
+      try { el.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) { el.scrollIntoView(); }
+    }
+  }
+
+  // The action map: each name in WT.demo.ACTIONS -> the real app capability
+  // (the exact function the manual control already calls). No feature logic
+  // is duplicated here.
+  function demoActions() {
+    return {
+      loadExample: (step) => { loadExample(step.exampleId); },
+      runWmsOps: () => { demoFocus("wmsCard"); runWmsOps(); },
+      playFlow: () => { demoFocus("flowCard"); flowPlay(); },
+      showKpis: () => { demoFocus("flowKpiCanvas"); drawFlowKpis(); },
+      offerReport: () => { demoFocus("reportOpenBtn"); const b = $("reportOpenBtn"); if (b) b.classList.add("demo-pulse"); },
+    };
+  }
+
+  // An INTERRUPTIBLE delay: Stop resolves the pending pause immediately so
+  // the WT.demo.run loop reaches its next stopped() check and unwinds.
+  function demoPause(ms) {
+    return new Promise((resolve) => {
+      if (demoStopFlag) { resolve(); return; }
+      demoResolvePause = resolve;
+      demoTimer = setTimeout(() => { demoTimer = null; demoResolvePause = null; resolve(); }, Math.max(0, ms | 0));
+    });
+  }
+
+  function showDemoHud(on) { const hud = $("demoHud"); if (hud) hud.hidden = !on; }
+
+  function updateDemoHud(step, i, total) {
+    const s = $("demoHudStep"), t = $("demoHudTitle"), b = $("demoHudBlurb");
+    if (s) s.textContent = (i + 1) + "/" + total;
+    if (t) t.textContent = step.title;
+    if (b) b.textContent = step.blurb;
+    status("Guided demo " + (i + 1) + "/" + total + ": " + step.title + " - " + step.blurb);
+  }
+
+  function finishDemo(wasStopped) {
+    demoRunning = false;
+    demoStopFlag = false;
+    if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
+    demoResolvePause = null;
+    showDemoHud(false);
+    const rb = $("reportOpenBtn"); if (rb) rb.classList.remove("demo-pulse");
+    const gb = $("guidedDemoBtn"); if (gb) gb.classList.remove("active");
+    toast(wasStopped
+      ? "Guided demo stopped - back to normal editing. Everything shown is a SYNTHETIC scenario (no real company)."
+      : "Guided demo complete - open the WMS Report, or keep exploring. Everything shown is SYNTHETIC (no real company).");
+    status(wasStopped
+      ? "Guided demo stopped. Normal editing resumed."
+      : "Guided demo complete. The floor holds a SYNTHETIC example scenario - export it, tweak it, or build the WMS Report.");
+  }
+
+  function startGuidedDemo() {
+    if (!WT.demo) { toast("Guided demo needs demo.js.", "warn"); return; }
+    if (demoRunning) return;
+    // Clear any open overlay so the tour is visible.
+    if ($("onboard")) $("onboard").hidden = true;
+    if ($("about")) $("about").hidden = true;
+    demoRunning = true;
+    demoStopFlag = false;
+    const gb = $("guidedDemoBtn"); if (gb) gb.classList.add("active");
+    showDemoHud(true);
+    status("Guided demo starting - a one-click end-to-end tour on a SYNTHETIC example scenario.");
+    WT.demo.run({
+      actions: demoActions(),
+      pause: demoPause,
+      stopped: () => demoStopFlag,
+      onStep: updateDemoHud,
+      onDone: () => finishDemo(false),
+      onStop: () => finishDemo(true),
+    });
+  }
+
+  function stopGuidedDemo() {
+    if (!demoRunning) return;
+    demoStopFlag = true;
+    if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
+    if (demoResolvePause) { const r = demoResolvePause; demoResolvePause = null; r(); }
+  }
+
+  // Render the About / why-this panel from WT.demo.ABOUT (single source of
+  // truth - the honesty copy is asserted headlessly in verify_demo.js).
+  function buildAbout() {
+    const body = $("aboutBody");
+    if (!body || !WT.demo || !WT.demo.ABOUT) return;
+    const A = WT.demo.ABOUT;
+    const li = (arr) => (arr || []).map((x) => "<li>" + esc(x) + "</li>").join("");
+    const chips = (A.pipeline || []).map((p) => '<span class="about-chip">' + esc(p) + "</span>").join("");
+    body.innerHTML =
+      '<h2 id="aboutTitle">' + esc(A.title) + "</h2>" +
+      '<p class="about-tagline">' + esc(A.tagline) + "</p>" +
+      (chips ? '<div class="about-pipeline">' + chips + "</div>" : "") +
+      "<h3>What it does</h3><ul class=\"about-list\">" + li(A.what) + "</ul>" +
+      "<h3>How it stays honest</h3><ul class=\"about-list about-honesty\">" + li(A.honesty) + "</ul>" +
+      "<h3>Who it is for</h3><p class=\"about-for\">" + esc(A.forWho) + "</p>";
+  }
+
+  function openAbout() { buildAbout(); if ($("about")) $("about").hidden = false; }
+  function closeAbout() { if ($("about")) $("about").hidden = true; }
+
+  // ================================================================
   // TOOLTIPS + TOAST
   // ================================================================
   const tip = $("tooltip");
@@ -4881,6 +4999,12 @@
     $("compareBtn").addEventListener("click", runCompare);
     $("helpBtn").addEventListener("click", () => { $("onboard").hidden = false; });
     $("onboardClose").addEventListener("click", closeOnboard);
+    // P8: guided demo + About / why this
+    if ($("guidedDemoBtn")) $("guidedDemoBtn").addEventListener("click", startGuidedDemo);
+    if ($("demoStopBtn")) $("demoStopBtn").addEventListener("click", stopGuidedDemo);
+    if ($("aboutBtn")) $("aboutBtn").addEventListener("click", openAbout);
+    if ($("aboutClose")) $("aboutClose").addEventListener("click", closeAbout);
+    if ($("aboutRunDemo")) $("aboutRunDemo").addEventListener("click", () => { closeAbout(); startGuidedDemo(); });
     wireViewControls();
   }
 
@@ -4915,6 +5039,7 @@
     buildGeneratePanel();
     buildExamplesPanel();
     buildExampleQuickPick();
+    buildAbout(); // P8: render the About / why-this copy from WT.demo.ABOUT
     wireButtons();
     wireDataPanel();
     wireWmsDataPanel();

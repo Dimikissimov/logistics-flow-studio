@@ -45,6 +45,13 @@
       </select>
     </div>
     <div class="topbar-actions">
+      <!-- P8: one-click guided demo — runs the whole stack end-to-end by
+           calling the SAME functions the manual controls call (load a
+           synthetic scenario → run WMS ops → play the flow → surface the
+           live KPIs → offer the report). Interruptible; see app.js. -->
+      <button id="guidedDemoBtn" class="btn accent" type="button" title="Run a one-click guided tour of the whole app end-to-end on a synthetic example scenario (interruptible)">▶ Guided demo</button>
+      <!-- P8: concise, honest "About / why this" panel -->
+      <button id="aboutBtn" class="btn ghost" type="button" title="What WarehouseTwin is, what it does, and how it stays honest (offline, synthetic-unless-imported, not a certification)">About</button>
       <!-- P5: the network-level companion app (lsp/) -->
       <a class="btn app-link" href="lsp/index.html" title="Open LSP Planner — the logistics-network planning game (levels, scoring, A/B compare)">LSP Planner &rarr;</a>
       <!-- P4 tier gate: an honest showcase switch (tiers.js), NOT DRM.
@@ -620,6 +627,30 @@
     </div>
   </div>
 
+  <!-- P8: Guided-demo step indicator (a small, interruptible HUD). Its
+       text is set from the WT.demo plan; Stop ends the sequence and hands
+       control straight back to normal editing. -->
+  <div id="demoHud" class="demo-hud" role="status" aria-live="polite" hidden>
+    <span id="demoHudStep" class="demo-hud-step">1/5</span>
+    <div class="demo-hud-text">
+      <strong id="demoHudTitle">Guided demo</strong>
+      <span id="demoHudBlurb"></span>
+    </div>
+    <button id="demoStopBtn" class="btn ghost demo-hud-stop" type="button" title="Stop the guided demo and return to normal editing">Stop</button>
+  </div>
+
+  <!-- P8: About / why this — concise, honest positioning. Body is rendered
+       from WT.demo.ABOUT (single source of truth) at boot. -->
+  <div id="about" class="overlay" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <div id="aboutBody"><!-- filled by app.js buildAbout() from WT.demo.ABOUT --></div>
+      <div class="ob-actions">
+        <button id="aboutRunDemo" class="btn accent" type="button" title="Close this and run the one-click guided demo">▶ Run the guided demo</button>
+        <button id="aboutClose" class="btn primary" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom tooltip + toast -->
   <div id="tooltip" class="tooltip" hidden></div>
   <div id="toast" class="toast" hidden></div>
@@ -652,6 +683,7 @@
   <script src="iso.js"></script>
   <script src="storage.js"></script>
   <script src="report.js"></script>
+  <script src="demo.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
