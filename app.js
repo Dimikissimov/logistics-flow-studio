@@ -109,7 +109,14 @@
     // samples feeding the Live KPI throughput chart; `kpiBase` is the
     // completed count just before the window (keeps windowed buckets
     // honest); `kpiLastDraw` throttles the cockpit redraw to a few Hz.
-    flow: { on: false, playing: false, speed: 1, sim: null, raf: null, sig: null, kpiHist: [], kpiBase: 0, kpiLastDraw: 0 },
+    // v1.3: `pool` is the live WT.orderpool state (the visible demand side);
+    // `poolPrevSpawned` / `poolPrevCompleted` snapshot the flow's cumulative
+    // spawn/retire so each frame's SELECTED aligns with MUs entering picking
+    // and COMPLETED with MUs shipped; `poolHist` is a small rolling backlog
+    // ring for the sparkline; `poolDemandFactor` sets the synthetic arrival
+    // (order-generation) rate as a multiple of the modelled pick capacity so a
+    // live backlog is visible (honest what-if, documented in the readout).
+    flow: { on: false, playing: false, speed: 1, sim: null, raf: null, sig: null, kpiHist: [], kpiBase: 0, kpiLastDraw: 0, pool: null, poolPrevSpawned: 0, poolPrevCompleted: 0, poolHist: [], poolDemandFactor: 1.15 },
   };
 
   // ---------------- DOM refs ----------------
@@ -1052,7 +1059,66 @@
     state.flow.sim = WT.flowsim.state(layout, opts);
     state.flow.sig = flowSignature();
     resetKpiHistory(); // new sim -> counters restart at 0, so does the chart
+    buildOrderPool(seed, shape); // v1.3: the visible demand-side pool
     return true;
+  }
+
+  /* ------------------------------------------------------------------
+   * v1.3: (re)build the live ORDER POOL alongside the flow sim. The pool
+   * shares the flow's seed and its units-per-order convention so the pool's
+   * SELECTED (released into picking) aligns with the flow's spawned MUs and
+   * its COMPLETED with the flow's shipped MUs. Generation reuses the SKU-
+   * velocity-weighted wmsdata generator when present (fallback otherwise).
+   * When WT.orderpool is missing the readout simply stays inert.
+   * ------------------------------------------------------------------ */
+  const POOL_HIST_MAX = 120; // rolling backlog window for the sparkline
+  function buildOrderPool(seed, shape) {
+    state.flow.poolHist = [];
+    state.flow.poolPrevSpawned = state.flow.sim ? state.flow.sim.spawned : 0;
+    state.flow.poolPrevCompleted = state.flow.sim ? state.flow.sim.completed : 0;
+    if (!WT.orderpool) { state.flow.pool = null; return; }
+    // Units-per-order taken from the SAME convention flowsim uses, so the
+    // flow's MU deltas convert cleanly to order selections/completions.
+    const linesMax = (shape && shape.linesPerOrderMax) || (WT.flowsim.PARAMS && WT.flowsim.PARAMS.linesPerOrderMax) || 6;
+    const avgUnits = (1 + linesMax) / 2;
+    const tph = (WT.flowsim.PARAMS && WT.flowsim.PARAMS.ticksPerHour) || 60;
+    state.flow.pool = WT.orderpool.create({
+      seed: seed,
+      ticksPerHour: tph,
+      avgUnitsPerOrder: avgUnits,
+      initialFill: 0.15, // a small starting backlog so the pool is visible from frame 1
+      skuCount: state.config.skuCount, // velocity-weighted stream shape (wmsdata)
+      demandSkew: state.config.demandSkew,
+    });
+  }
+
+  // Step the order pool by the SAME dtTicks the flow advanced, driving its
+  // selections/completions from the flow's realized spawn/retire deltas
+  // (units -> orders) and its arrivals from a synthetic demand rate set a
+  // little above the modelled pick capacity so a live backlog is visible.
+  function stepOrderPool(dtTicks) {
+    const sim = state.flow.sim, pool = state.flow.pool;
+    if (!WT.orderpool || !sim || !pool) return;
+    const dSpawn = Math.max(0, sim.spawned - state.flow.poolPrevSpawned);
+    const dComp = Math.max(0, sim.completed - state.flow.poolPrevCompleted);
+    state.flow.poolPrevSpawned = sim.spawned;
+    state.flow.poolPrevCompleted = sim.completed;
+    const dt = dtTicks > 0 ? dtTicks : 1;
+    const avg = pool.avgUnitsPerOrder || 3.5;
+    const tph = pool.ticksPerHour || 60;
+    const selectionsPerTick = (dSpawn / dt) / avg; // aligns with MUs entering picking
+    const completionsPerTick = (dComp / dt) / avg; // aligns with MUs shipped
+    const lineUnitsPerHr = (sim.plan && sim.plan.lineThroughput) || 0;
+    const capacityOrdersPerTick = (lineUnitsPerHr / avg) / tph;
+    const arrivalsPerTick = capacityOrdersPerTick * (state.flow.poolDemandFactor || 1.15);
+    WT.orderpool.step(pool, dt, {
+      arrivalsPerTick: arrivalsPerTick,
+      selectionsPerTick: selectionsPerTick,
+      completionsPerTick: completionsPerTick,
+    });
+    const h = state.flow.poolHist;
+    h.push(pool.inPool);
+    while (h.length > POOL_HIST_MAX) h.shift();
   }
 
   // Ensure the sim exists and matches the current layout; rebuild if not.
@@ -1073,9 +1139,12 @@
     // If the layout changed mid-play (loaded an example, generated, resized,
     // edited an element), rebuild so the boxes track the current floor.
     if (!state.flow.sim || state.flow.sig !== flowSignature()) flowBuild();
-    if (state.flow.sim) WT.flowsim.step(state.flow.sim, Math.max(0.05, state.flow.speed) * FLOW_BASE_DT);
+    const flowDt = Math.max(0.05, state.flow.speed) * FLOW_BASE_DT;
+    if (state.flow.sim) WT.flowsim.step(state.flow.sim, flowDt);
+    stepOrderPool(flowDt); // v1.3: advance the pool by the SAME ticks the flow ran
     render();
     updateFlowReadout();
+    updatePoolReadout();
     // Feed the Live KPI cockpit from THIS loop (throttled to a few Hz so
     // the chart redraw never competes with the animation frame rate).
     const now = (window.performance && performance.now) ? performance.now() : Date.now();
@@ -1107,6 +1176,7 @@
     updateFlowButtons();
     render();
     updateFlowReadout();
+    updatePoolReadout(); // paused: the pool holds its last state
     drawFlowKpis(); // paused: redraw once so the cockpit holds the last frame
     status("Live material flow: paused — back to the normal edit view.");
   }
@@ -1117,9 +1187,11 @@
     if (!flowEnsureFresh()) return;
     state.flow.on = true;
     WT.flowsim.step(state.flow.sim, FLOW_STEP_TICKS);
+    stepOrderPool(FLOW_STEP_TICKS); // v1.3: keep the pool in lock-step
     updateFlowButtons();
     render();
     updateFlowReadout();
+    updatePoolReadout();
     sampleFlowKpis();
     drawFlowKpis();
     status("Live material flow: stepped forward one bucket.");
@@ -1132,6 +1204,7 @@
     updateFlowButtons();
     render();
     updateFlowReadout();
+    updatePoolReadout(); // reset the pool readout to its fresh state
     sampleFlowKpis();
     drawFlowKpis();
     status("Live material flow: reset to the start (tick 0). Press Play to fill the floor.");
@@ -1166,6 +1239,78 @@
       '<p class="flow-stats">In-flight <strong>' + s.inflight + "</strong> · Shipped <strong>" + s.completed +
       "</strong> · tick " + s.tick + " · bottleneck throughput ~" + s.plan.lineThroughput.toFixed(0) + " units/hr" +
       queueTxt + (state.flow.playing ? "" : " · paused") + "</p>";
+  }
+
+  /* ------------------------------------------------------------------
+   * v1.3: Live ORDER POOL readout. Renders the WT.orderpool stats into the
+   * flow card: backlog + fill bar, generated/selected/completed (+ dropped),
+   * live in/out rates, in-flight, a starving/saturating flag and a backlog
+   * sparkline. Fed from the SAME rAF loop as the animation; holds its last
+   * state when paused. Everything synthetic + honestly labelled.
+   * ------------------------------------------------------------------ */
+  function updatePoolReadout() {
+    const out = $("flowPoolReadout");
+    if (!out) return;
+    const pool = state.flow.pool;
+    if (!WT.orderpool || !pool) {
+      out.innerHTML = '<p class="empty">Order pool needs orderpool.js.</p>';
+      return;
+    }
+    const st = WT.orderpool.stats(pool);
+    const pct = Math.max(0, Math.min(100, st.fillPct));
+    const fill = $("flowPoolFill"), fillLabel = $("flowPoolFillLabel"), flag = $("flowPoolFlag");
+    if (fill) {
+      fill.style.width = pct.toFixed(1) + "%";
+      fill.classList.toggle("is-saturating", st.saturating);
+      fill.classList.toggle("is-starving", st.starving && !st.saturating);
+    }
+    if (fillLabel) {
+      fillLabel.innerHTML = "<span>Backlog " + st.backlog + " / " + st.cap + "</span><span>" + pct.toFixed(0) + "%</span>";
+    }
+    if (flag) {
+      let cls = "is-healthy", txt = "Flowing";
+      if (st.saturating) { cls = "is-saturating"; txt = "Saturating — pool at cap, orders dropping"; }
+      else if (st.starving) { cls = "is-starving"; txt = "Starving — pool empty"; }
+      flag.hidden = false;
+      flag.className = "flow-pool-flag " + cls;
+      flag.textContent = txt;
+    }
+    const dropTxt = st.dropped > 0 ? " · dropped <strong>" + st.dropped + "</strong>" : "";
+    out.innerHTML =
+      '<p class="flow-pool-stats">Generated <strong>' + st.generated + "</strong> · selected <strong>" + st.selected +
+      "</strong> · completed <strong>" + st.completed + "</strong>" + dropTxt + "<br>" +
+      "In <strong>" + st.inRatePerHr.toFixed(0) + "</strong>/hr · out <strong>" + st.outRatePerHr.toFixed(0) +
+      "</strong>/hr · in-flight <strong>" + st.inFlightSelected + "</strong> · gen " +
+      (st.generatorSource === "wmsdata" ? "velocity-weighted (wmsdata)" : "seeded fallback") +
+      (state.flow.playing ? "" : " · paused") + "</p>";
+    drawPoolSpark();
+  }
+
+  // Tiny backlog sparkline drawn directly (no external dep) from the rolling
+  // pool-backlog history, scaled to [0, cap]. Theme-aware; defensive.
+  function drawPoolSpark() {
+    const canvas = $("flowPoolSpark");
+    if (!canvas || typeof canvas.getContext !== "function") return;
+    const g = canvas.getContext("2d");
+    if (!g) return;
+    const w = canvas.width, h = canvas.height, pad = 2;
+    g.clearRect(0, 0, w, h);
+    const hist = state.flow.poolHist || [];
+    const pool = state.flow.pool;
+    const cap = (pool && pool.cap) || 1;
+    if (hist.length < 2) return;
+    const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const n = hist.length;
+    g.lineWidth = 1.5;
+    g.strokeStyle = dark ? "#c084fc" : "#9333ea";
+    g.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = pad + (w - 2 * pad) * (i / (n - 1));
+      const v = Math.max(0, Math.min(cap, hist[i]));
+      const y = h - pad - (h - 2 * pad) * (cap > 0 ? v / cap : 0);
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.stroke();
   }
 
   /* ------------------------------------------------------------------

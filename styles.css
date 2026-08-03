@@ -985,6 +985,74 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .flow-stats { font-size: 0.75rem; color: var(--text-dim); margin: 0; line-height: 1.5; }
 .flow-stats strong { color: var(--text); font-variant-numeric: tabular-nums; }
 
+/* v1.3: Live ORDER POOL readout — the visible demand side (WT.orderpool).
+ * A compact backlog + fill bar, generated/selected/completed counters, live
+ * in/out rates, a starving/saturating flag and a backlog sparkline. All the
+ * numbers are synthetic (bounded-queue heuristic) and honestly labelled. */
+.flow-pool {
+  margin-top: 12px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.flow-pool-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.flow-pool-title { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.flow-pool-flag {
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.flow-pool-flag.is-starving { color: #d97706; border-color: color-mix(in srgb, #d97706 55%, var(--border)); background: color-mix(in srgb, #d97706 12%, transparent); }
+.flow-pool-flag.is-saturating { color: #dc2626; border-color: color-mix(in srgb, #dc2626 55%, var(--border)); background: color-mix(in srgb, #dc2626 12%, transparent); }
+.flow-pool-flag.is-healthy { color: #16a34a; border-color: color-mix(in srgb, #16a34a 55%, var(--border)); background: color-mix(in srgb, #16a34a 12%, transparent); }
+.flow-pool-bar {
+  position: relative;
+  height: 18px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.flow-pool-fill {
+  height: 100%;
+  width: 0%;
+  background: color-mix(in srgb, #9333ea 60%, var(--surface));
+  transition: width 0.12s linear, background 0.2s linear;
+}
+.flow-pool-fill.is-saturating { background: color-mix(in srgb, #dc2626 60%, var(--surface)); }
+.flow-pool-fill.is-starving { background: color-mix(in srgb, #d97706 55%, var(--surface)); }
+.flow-pool-fill-label {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  line-height: 18px;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.flow-pool-spark {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-top: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+.flow-pool-readout { margin-top: 8px; }
+.flow-pool-readout .empty { color: var(--text-dim); font-size: 0.78rem; }
+.flow-pool-stats { font-size: 0.74rem; color: var(--text-dim); margin: 0; line-height: 1.55; }
+.flow-pool-stats strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.flow-pool-cap { font-size: 0.66rem; color: var(--text-dim); margin: 8px 0 0; line-height: 1.45; }
+.flow-pool-cap strong { color: var(--warn); }
+
 /* P3.1: Live KPI dashboard (kpicharts.js). A compact plant-sim cockpit
  * strip drawn on its own screen-space canvas (outside the world zoom/pan
  * transform), refreshed from the same rAF loop that runs the flow. The

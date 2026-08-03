@@ -530,6 +530,26 @@
           <input id="flowSpeed" type="range" min="0.25" max="4" step="0.25" value="1" aria-label="Animation speed multiplier" />
         </div>
         <div id="flowReadout" class="flow-readout"><p class="empty">Press Play (or Step) to animate boxes moving through the warehouse. Pause returns to the normal edit view.</p></div>
+        <!-- v1.3: Live ORDER POOL — the demand side made visible. Orders are
+             generated over time into a bounded backlog (SizeOrderPool-style
+             cap), selected/released into the picking flow at the line rate and
+             completed as the flow ships them. Driven from the SAME rAF loop as
+             the animation: "selected" aligns with MUs entering picking,
+             "completed" with MUs shipped. Pure model in orderpool.js
+             (WT.orderpool); verify_orderpool.js covers it headlessly. -->
+        <div class="flow-pool" id="flowPool" aria-label="Live order pool">
+          <div class="flow-pool-head">
+            <span class="flow-pool-title">Order pool</span>
+            <span class="flow-pool-flag" id="flowPoolFlag" hidden></span>
+          </div>
+          <div class="flow-pool-bar" title="Pool backlog vs the SizeOrderPool cap">
+            <div class="flow-pool-fill" id="flowPoolFill" style="width:0%"></div>
+            <span class="flow-pool-fill-label" id="flowPoolFillLabel">0 / 0</span>
+          </div>
+          <canvas id="flowPoolSpark" class="flow-pool-spark" width="240" height="34" role="img" aria-label="Order-pool backlog over time (sparkline). Synthetic bounded-queue heuristic, not measured."></canvas>
+          <div id="flowPoolReadout" class="flow-pool-readout"><p class="empty">Press Play (or Step) to fill and drain the order pool.</p></div>
+          <p class="flow-pool-cap"><strong>SYNTHETIC order pool</strong> — a transparent <strong>bounded-queue heuristic</strong> (seeded arrivals into a capped backlog; selection tied to the documented <code>wms.js</code>/<code>flowsim.js</code> throughput model), <strong>not</strong> a real DES/queueing engine, <strong>not measured</strong> and not a certification. Overflow at the cap is counted as <em>dropped</em> (backpressure) and starvation is flagged — both shown, never hidden. Generation reuses the SKU-velocity-weighted <code>wmsdata</code> generator when present (synthetic unless you import your own data).</p>
+        </div>
         <!-- P3.1: Live KPI dashboard — a compact "plant-sim cockpit" strip
              (kpicharts.js) that updates in real time from the SAME rAF loop
              that runs the flow animation. Throughput-over-time, the 7-stage
@@ -754,6 +774,7 @@
   <script src="cards.js"></script>
   <script src="scenarios.js"></script>
   <script src="compare.js"></script>
+  <script src="orderpool.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

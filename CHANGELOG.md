@@ -6,6 +6,49 @@ seeded teaching heuristic unless you import your own data** — informed by publ
 standards (ISO 22400, DIN 15185, ASR, EN, VDI), not a certification and not a
 measurement of a real site.
 
+## [1.3.0] — 2026-08-03
+
+### Added
+- **Live order pool.** The demand side of the plant is now **visible and
+  live**. A new bounded order-pool model (`orderpool.js` → `WT.orderpool`)
+  mirrors the classic Siemens Plant Simulation spine — *generateOrders →
+  DT_tempOrders (SizeOrderPool) → M_selectOrders → consumed*: orders are
+  **generated over time** into a **bounded backlog** (a `SizeOrderPool`-style
+  cap), **selected/released** into the picking flow at the line rate, and
+  marked **completed** as the flow ships them. It is driven from the **same
+  `requestAnimationFrame` loop** that steps `WT.flowsim` (no competing loop),
+  so the pool's **selected** aligns with handling units entering picking and
+  its **completed** with units shipped; the pool's selection/completion rates
+  are taken from the flow's realized spawn/retire deltas each frame, and its
+  arrival (order-generation) rate is a synthetic demand set a little above the
+  modelled pick capacity so a live backlog is visible. When the flow isn't
+  playing the pool **holds its last state**.
+- A compact **"Order pool"** readout in the Live material flow card shows the
+  **backlog + fill bar**, **generated / selected / completed** counts (and
+  **dropped** when the cap overflows), live **in / out rates** (orders/hr),
+  **in-flight** count, a backlog **sparkline**, and an honest **starving**
+  (empty pool while the picker wants work) / **saturating** (backlog at the
+  cap, overflowing) flag.
+- The model is **pure and deterministic** (seeded mulberry32; no `Date`, no
+  `Math.random`) and **count-conserving at every step**: `generated == inPool
+  + inFlightSelected + completed + dropped`. Overflow at the cap is counted as
+  **dropped** (backpressure) and pool **starvation** is flagged — both
+  reported, never hidden. Order generation **reuses the SKU-velocity-weighted
+  generator from `wmsdata`** when present (a Zipf/Pareto heuristic, not
+  measured demand) and falls back to a simple seeded generator when it is not.
+- A transparent **bounded-queue heuristic** — selection tied to the documented
+  `wms.js`/`flowsim.js` throughput model — **not** a real discrete-event /
+  queueing engine, **not measured**, not a certification. **SYNTHETIC** unless
+  you import your own data.
+
+### Engineering
+- 26 headless verification harnesses via `node test/run-all.mjs` (the new
+  `verify_orderpool.js`, 22 checks: determinism, count conservation, the cap +
+  honest overflow, backlog grow/drain, the starving/saturating flags, the
+  selection-rate tie to WT.wms/WT.flowsim, the wmsdata velocity-weighting +
+  fallback, and the honesty labels). Service-worker cache bumped to `wt-v32`
+  (precaching `orderpool.js`).
+
 ## [1.2.0] — 2026-08-03
 
 ### Added

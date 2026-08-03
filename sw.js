@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v31"; // v1.2 usability: Scenario A/B compare (compare.js -> WT.compare, a pure/deterministic compare whose per-side metrics are DERIVED FROM WT.report.build so they can't drift from the app; app.js adds a "Compare A/B" panel + side-by-side delta modal that resolves sources through the SAME builders — currentLayout / examples.build / scenarios.load — and computes on the snapshots WITHOUT disturbing the floor). New verify_compare.js harness (compare/app/index/styles/sw changed)
+const CACHE_VERSION = "wt-v32"; // v1.3: Live order pool (orderpool.js -> WT.orderpool, a pure/deterministic bounded order-pool model mirroring the Siemens generateOrders -> DT_tempOrders(SizeOrderPool) -> M_selectOrders -> consumed spine). Driven from the SAME rAF loop that steps WT.flowsim: selections align with MUs entering picking, completions with MUs shipped; app.js adds a compact "Order pool" readout (backlog + fill bar, generated/selected/completed, in/out rates, starving/saturating flag, backlog sparkline). Count-conserving (generated == inPool + inFlightSelected + completed + dropped), overflow honestly dropped. New verify_orderpool.js harness (orderpool/app/index/styles/sw changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -40,6 +40,7 @@ const APP_SHELL = [
   "./cards.js",
   "./scenarios.js",
   "./compare.js",
+  "./orderpool.js",
   "./app.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",

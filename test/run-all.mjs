@@ -210,6 +210,26 @@
  *      NOT measured / NOT a certification / ISO-DIN-VDI honesty is restated.
  *      The DOM panel/modal are added by app.js and not headless-testable;
  *      the pure compare + cross-consistency behind them are covered here.
+ *  26. verify_orderpool.js - Live order pool (v1.3): WT.orderpool is a PURE,
+ *      DETERMINISTIC, bounded order-pool model (the Siemens generateOrders ->
+ *      DT_tempOrders(SizeOrderPool) -> M_selectOrders -> consumed spine).
+ *      Asserts determinism (same seed + same (dtTicks, io) sequence -> byte-
+ *      identical counters/accumulators/PRNG, and chunking-invariant whole
+ *      ticks), COUNT CONSERVATION at every step (generated == inPool +
+ *      inFlightSelected + completed + dropped) across fill/drain/steady
+ *      phases, the cap respected (inPool never exceeds SizeOrderPool, overflow
+ *      counted as dropped/backpressure), backlog growing when arrivals >
+ *      selections and draining when selections > arrivals, the starving
+ *      (empty pool under demand) and saturating (backlog at the cap /
+ *      overflowing) flags correct at the extremes and BOTH off at a balanced
+ *      mid state, the selection rate tied to WT.wms / WT.flowsim throughput
+ *      (releasing ~lineThroughput/avgUnits orders per hour), the wmsdata SKU-
+ *      velocity-weighted generator used when present with a graceful fallback
+ *      when it is absent (and when useWmsData:false), completions never
+ *      exceeding selections, non-negative rates + fillPct, and the SYNTHETIC /
+ *      heuristic / NOT a DES engine / NOT measured / NOT a certification /
+ *      overflow + starvation honesty labels. The DOM readout is added by
+ *      app.js and not headless-testable; the pure model behind it is covered.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -245,6 +265,7 @@ const HARNESSES = [
   { name: "Collapsible side-panel cards (verify_ui.js)", args: ["verify_ui.js"] },
   { name: "Save / load named scenarios (verify_scenarios.js)", args: ["verify_scenarios.js"] },
   { name: "Scenario A/B compare (verify_compare.js)", args: ["verify_compare.js"] },
+  { name: "Live order pool (verify_orderpool.js)", args: ["verify_orderpool.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
