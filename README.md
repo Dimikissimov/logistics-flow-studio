@@ -58,6 +58,12 @@ Single-page, no-build, no-framework — hand-written HTML, CSS and vanilla JavaS
 
 The whole app is one screen: palette and generators on the left, the floor in the middle, properties and analysis on the right. The **side-panel cards are collapsible** — click a card's header (or press Enter/Space while it is focused) to fold that card away and keep long panels tidy; the collapsed state is remembered in your browser. Every card starts **expanded**, so first load looks and behaves exactly as before. A three-step onboarding card and tooltips on every palette item get a newcomer running in under a minute.
 
+## Screenshots
+
+![WarehouseTwin with the Cold-chain frozen-DC example scenario loaded — distinct 2D object glyphs across the canvas floor plan, alongside the palette, properties and analysis panels](docs/screenshots/warehousetwin-coldchain.png)
+
+The built-in **Cold-chain frozen DC** example scenario loaded onto the floor (opened directly via `index.html?scenario=coldchain-frozen-dc`). Each warehouse object draws as its own distinct 2D schematic glyph rather than a coloured rectangle. Like every example, it is **synthetic and illustrative** — no real company, brand or site — and the standards work is *informed by, not a certification*.
+
 ## Run it locally
 
 It's static — no server or build step required.
