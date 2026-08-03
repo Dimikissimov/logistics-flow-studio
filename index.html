@@ -150,6 +150,18 @@
              Generated locally by ifc.js - no library, no network. -->
         <button id="ifcBtn" class="btn wide" type="button" style="margin-top:8px" title="Download this layout as an IFC4 (STEP) file — the BIM exchange format every German planning office reads. Generated locally, nothing is uploaded.">Export IFC (BIM)</button>
         <p class="hint">A <strong>scoped IFC4 export</strong> — elements as proxy solids for coordination/viewing; not full BIM authoring. Opens in free viewers such as BIMvision, usBIM.viewer or Open&nbsp;IFC&nbsp;Viewer.</p>
+        <!-- P7: consolidated WMS Report — one printable/exportable summary that
+             AGGREGATES every layer (layout, compliance, WMS ops, storage,
+             automation, data profile, standards basis). Built locally by
+             report.js; cross-consistent with the source modules. -->
+        <div class="report-group" style="margin-top:10px">
+          <div class="btn-grid">
+            <button id="reportOpenBtn" class="btn" type="button" title="Build a consolidated WMS Report for the current model and open a self-contained, printable page — use your browser's Print → Save as PDF. Offline, nothing is uploaded.">WMS Report (print)</button>
+            <button id="reportJsonBtn" class="btn" type="button" title="Download the full consolidated report as deterministic JSON for archiving / round-trip. Offline, nothing is uploaded.">Report JSON</button>
+          </div>
+          <button id="reportCsvBtn" class="btn wide" type="button" style="margin-top:8px" title="Download a flat metric/value CSV roll-up of the report's section KPIs (Excel-openable). Offline, nothing is uploaded.">Report summary (CSV)</button>
+          <p class="hint">A <strong>consolidated stakeholder report</strong> — layout, compliance, WMS KPIs, storage, automation, data profile and the standards basis in one place, built from the same modules the app uses (numbers can't drift). <strong>SYNTHETIC</strong> unless you imported your own data — a transparent heuristic informed by ISO/DIN/EN/VDI, <strong>not a certification, not measured</strong>.</p>
+        </div>
         <button id="shareBtn" class="btn wide" type="button" title="Copy a link that carries this whole layout inside its #layout= URL fragment — offline, nothing is uploaded, no server involved">Share layout link</button>
         <p class="hint">The link <em>is</em> the data: the whole design travels in the URL's <strong>#layout=…</strong> fragment. Nothing is uploaded and no server is involved — opening the link rebuilds the layout locally (same validation as JSON import). Combines with <strong>?tour=off</strong>.</p>
         <button id="presetBtn" class="btn wide" type="button" style="margin-top:8px">Preset: Industrial MRO distributor</button>
@@ -639,6 +651,7 @@
   <script src="wmsdata.js"></script>
   <script src="iso.js"></script>
   <script src="storage.js"></script>
+  <script src="report.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

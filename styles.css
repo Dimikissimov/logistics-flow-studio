@@ -185,6 +185,9 @@ a.btn.app-link { color: var(--accent); border-color: color-mix(in srgb, var(--ac
 
 .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
+/* P7: consolidated WMS Report control group - a subtle separated block. */
+.report-group { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border, #cbd5e1); }
+
 /* ---------------- P3: unit-load catalog ---------------- */
 .catalog-out { margin-top: 10px; overflow-x: auto; }
 .cat-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }

@@ -3316,6 +3316,86 @@
     status("IFC export written. Open it in a free viewer (BIMvision, usBIM.viewer, Open IFC Viewer) or any BIM tool.");
   }
 
+  // ================================================================
+  // P7: CONSOLIDATED WMS REPORT (report.js -> WT.report)
+  // ----------------------------------------------------------------
+  // One printable/exportable report that AGGREGATES every layer built
+  // so far (layout, compliance, WMS ops, storage, automation, data
+  // profile, standards basis) into a single stakeholder artifact. It
+  // does NOT recompute the physics - it pulls from the same modules the
+  // app uses, so the numbers can never drift. Deterministic given the
+  // passed-in timestamp. Offline: the printable HTML is a self-contained
+  // blob (inline CSS, no external refs) the user prints to PDF.
+  // ================================================================
+  function reportOpts() {
+    readConfigFromUI();
+    const c = state.config;
+    const hoursEl = $("wmsHoursInput");
+    const ordersEl = $("wmsOrdersInput");
+    const opts = {
+      timestamp: new Date().toISOString(), // header stamp only; the body is byte-stable for a given stamp
+      config: {
+        seed: Math.max(0, Math.round(Number(c.seed) || 0)),
+        strategy: c.strategy || "abc",
+        orders: Math.max(1, Math.round(Number(ordersEl && ordersEl.value) || Number(c.orders) || 300)),
+        hours: Math.max(1, Math.round(Number(hoursEl && hoursEl.value) || 8)),
+        skuCount: Math.max(1, Math.round(Number(c.skuCount) || 80)),
+        demandSkew: Number(c.demandSkew) || 1,
+        minAisleMetres: Number(c.minAisleMetres) || D.AISLE.defaultMinMetres,
+      },
+    };
+    // Scenario name/description when an example is selected/loaded.
+    if (selectedExampleId && WT.examples) {
+      const ex = WT.examples.library.find((e) => e.id === selectedExampleId);
+      if (ex) opts.scenario = { id: ex.id, name: ex.name, industry: ex.industry, description: ex.description };
+    }
+    // Imported data (SKU master + order pool) so the storage + data-profile
+    // sections reflect the user's own data, honestly labelled "yours".
+    if (WT.wmsdata && WT.wmsdata.isLoaded && WT.wmsdata.isLoaded()) {
+      opts.skuMaster = WT.wmsdata.skuMaster;
+      opts.orderPool = WT.wmsdata.orderPool;
+    }
+    return opts;
+  }
+
+  function buildCurrentReport() {
+    return WT.report.build(currentLayout(), reportOpts());
+  }
+
+  function openReportPrintable() {
+    if (!WT.report) { toast("WMS Report needs report.js.", "warn"); return; }
+    if (!state.elements.length) { toast("Add some elements first, then build the report.", "warn"); return; }
+    let html;
+    try {
+      html = WT.report.toHtml(buildCurrentReport());
+    } catch (err) { toast("Report build failed: " + err.message, "err"); return; }
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, "_blank");
+    if (!w) toast("Pop-up blocked - allow pop-ups to open the printable report, or use Report JSON.", "warn");
+    else toast("Opened the printable WMS Report - use your browser's Print -> Save as PDF (offline, nothing uploaded).");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    status("WMS Report built (consolidated, offline). SYNTHETIC unless you imported data - a transparent heuristic informed by ISO/DIN/EN/VDI, not a certification, not measured.");
+  }
+
+  function exportReportJson() {
+    if (!WT.report) { toast("WMS Report needs report.js.", "warn"); return; }
+    if (!state.elements.length) { toast("Add some elements first, then export the report.", "warn"); return; }
+    try {
+      downloadFile("warehousetwin-wms-report.json", WT.report.toJson(buildCurrentReport()), "application/json");
+    } catch (err) { toast("Report export failed: " + err.message, "err"); return; }
+    toast("Exported warehousetwin-wms-report.json (consolidated report - deterministic, offline, nothing uploaded).");
+  }
+
+  function exportReportCsv() {
+    if (!WT.report) { toast("WMS Report needs report.js.", "warn"); return; }
+    if (!state.elements.length) { toast("Add some elements first, then export the report.", "warn"); return; }
+    try {
+      downloadFile("warehousetwin-wms-report.csv", WT.report.toCsv(buildCurrentReport()), "text/csv");
+    } catch (err) { toast("Report export failed: " + err.message, "err"); return; }
+    toast("Exported warehousetwin-wms-report.csv (section KPI roll-up - Excel-openable, offline).");
+  }
+
   function importJSON(file) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -4758,6 +4838,10 @@
     $("loadBtn").addEventListener("click", () => loadSaved(false));
     $("exportBtn").addEventListener("click", exportJSON);
     $("ifcBtn").addEventListener("click", exportIFC); // W4: gate checked inside
+    // P7: consolidated WMS Report (report.js) - print / JSON / CSV.
+    $("reportOpenBtn").addEventListener("click", openReportPrintable);
+    $("reportJsonBtn").addEventListener("click", exportReportJson);
+    $("reportCsvBtn").addEventListener("click", exportReportCsv);
     $("shareBtn").addEventListener("click", shareLayout);
     $("importBtn").addEventListener("click", () => $("importInput").click());
     $("importInput").addEventListener("change", (e) => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; });

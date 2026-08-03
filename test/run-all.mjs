@@ -140,6 +140,20 @@
  *      formula), determinism, the auto.* KB defaults trace to the domain
  *      model (no drift), and the VDI-informed / NOT measured / NOT a vendor
  *      spec / NOT a certification honesty labels.
+ *  21. verify_report.js    - Consolidated WMS Report (P7): WT.report.build()
+ *      aggregates every layer into one stakeholder artifact and asserts
+ *      CROSS-CONSISTENCY so it can never drift from the app - the report's
+ *      compliance summary EQUALS WT.compliance.check, its KPIs EQUAL
+ *      WT.wms.kpis(runOperations), its occupancy EQUALS WT.storage.stats,
+ *      its automation EQUALS WT.automation.report and its data profile
+ *      EQUALS WT.wmsdata.stats (all for the same layout + echoed config);
+ *      the standards basis pulls WT.kb.list() with sources; toHtml is a
+ *      self-contained OFFLINE printable (no external refs) carrying the
+ *      honesty banner + every section header; toJson round-trips; same
+ *      layout + timestamp -> identical html/json/csv bytes (determinism);
+ *      it runs on an examples.js AND a generated layout; not-yet-run
+ *      sections are MARKED (never thrown); and the SYNTHETIC / NOT measured
+ *      / NOT a certification / ISO-DIN-VDI-informed honesty is restated.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -170,6 +184,7 @@ const HARNESSES = [
   { name: "Storage & inventory: slotting/occupancy/retrieval (verify_storage.js)", args: ["verify_storage.js"] },
   { name: "Editable standards knowledge base (verify_kb.js)", args: ["verify_kb.js"] },
   { name: "Automation systems modeling (verify_automation.js)", args: ["verify_automation.js"] },
+  { name: "Consolidated WMS Report (verify_report.js)", args: ["verify_report.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 
