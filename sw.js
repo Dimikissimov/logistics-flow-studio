@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v19"; // Live material-flow animation P3 (flowsim.js added; index/app/styles changed)
+const CACHE_VERSION = "wt-v20"; // Live KPI dashboard P3.1 (kpicharts.js added; index/app/styles changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -29,6 +29,7 @@ const APP_SHELL = [
   "./data.js",
   "./wms.js",
   "./flowsim.js",
+  "./kpicharts.js",
   "./app.js",
   // P5: LSP Planner sub-app (network-level planning game)
   "./lsp/index.html",

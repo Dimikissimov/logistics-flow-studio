@@ -68,6 +68,16 @@
  *      more completions, monotonic via WT.wms), world-cell positions, the
  *      lineThroughput tied to WT.wms.capacities, and the SYNTHETIC / NOT
  *      a real DES engine / NOT a measurement / NOT a certification labels.
+ *  14. verify_kpicharts.js    - Live KPI dashboard (P3.1): the PURE chart
+ *      layer (WT.kpicharts) is deterministic for a given flowsim state,
+ *      the throughput series is non-negative and sums to the completed
+ *      count (honest/conserving), the 7 WMS stages appear in the
+ *      utilisation bars, the bottleneck flagged matches WT.wms, every bar
+ *      is 0-based (data scales + layout geometry - the honesty check), the
+ *      colourblind-safe palette has enough distinct entries, light+dark
+ *      theme inputs both render, it runs on an examples and a generated
+ *      layout, and the SYNTHETIC / NOT measured / NOT a certification /
+ *      0-based labels are present.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -90,6 +100,7 @@ const HARNESSES = [
   { name: "Example Scenarios + data export (verify_examples.js)", args: ["verify_examples.js"] },
   { name: "WMS Operations layer (verify_wms.js)", args: ["verify_wms.js"] },
   { name: "Live material-flow animation (verify_flowsim.js)", args: ["verify_flowsim.js"] },
+  { name: "Live KPI dashboard (verify_kpicharts.js)", args: ["verify_kpicharts.js"] },
   { name: "viewport transform + floor size (verify_view.js)", args: ["verify_view.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];

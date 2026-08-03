@@ -79,7 +79,11 @@
     // flowsim state; `on` gates whether MUs are drawn; `playing` gates the
     // requestAnimationFrame loop; `sig` is the layout signature the sim was
     // built for (rebuilt when the layout/seed changes).
-    flow: { on: false, playing: false, speed: 1, sim: null, raf: null, sig: null },
+    // P3.1: `kpiHist` is a throttled ring buffer of {tick, completed}
+    // samples feeding the Live KPI throughput chart; `kpiBase` is the
+    // completed count just before the window (keeps windowed buckets
+    // honest); `kpiLastDraw` throttles the cockpit redraw to a few Hz.
+    flow: { on: false, playing: false, speed: 1, sim: null, raf: null, sig: null, kpiHist: [], kpiBase: 0, kpiLastDraw: 0 },
   };
 
   // ---------------- DOM refs ----------------
@@ -633,6 +637,7 @@
     const layout = Object.assign(currentLayout(), { config: state.config });
     state.flow.sim = WT.flowsim.state(layout, { seed: seed, loop: true });
     state.flow.sig = flowSignature();
+    resetKpiHistory(); // new sim -> counters restart at 0, so does the chart
     return true;
   }
 
@@ -657,6 +662,14 @@
     if (state.flow.sim) WT.flowsim.step(state.flow.sim, Math.max(0.05, state.flow.speed) * FLOW_BASE_DT);
     render();
     updateFlowReadout();
+    // Feed the Live KPI cockpit from THIS loop (throttled to a few Hz so
+    // the chart redraw never competes with the animation frame rate).
+    const now = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (now - state.flow.kpiLastDraw >= KPI_DRAW_MS) {
+      state.flow.kpiLastDraw = now;
+      sampleFlowKpis();
+      drawFlowKpis();
+    }
     state.flow.raf = requestAnimationFrame(flowFrame);
   }
 
@@ -667,6 +680,7 @@
     if (state.flow.playing) return;
     state.flow.playing = true;
     updateFlowButtons();
+    drawFlowKpis(); // immediate cockpit feedback; the rAF loop takes over
     state.flow.raf = requestAnimationFrame(flowFrame);
     status("Live material flow: playing — SYNTHETIC animation (not a real DES engine, not a measurement).");
   }
@@ -679,6 +693,7 @@
     updateFlowButtons();
     render();
     updateFlowReadout();
+    drawFlowKpis(); // paused: redraw once so the cockpit holds the last frame
     status("Live material flow: paused — back to the normal edit view.");
   }
 
@@ -691,6 +706,8 @@
     updateFlowButtons();
     render();
     updateFlowReadout();
+    sampleFlowKpis();
+    drawFlowKpis();
     status("Live material flow: stepped forward one bucket.");
   }
 
@@ -701,6 +718,8 @@
     updateFlowButtons();
     render();
     updateFlowReadout();
+    sampleFlowKpis();
+    drawFlowKpis();
     status("Live material flow: reset to the start (tick 0). Press Play to fill the floor.");
   }
 
@@ -730,6 +749,58 @@
       (state.flow.playing ? "" : " · paused") + "</p>";
   }
 
+  /* ------------------------------------------------------------------
+   * P3.1: Live KPI dashboard (kpicharts.js). A compact plant-sim cockpit
+   * strip — throughput-over-time, the 7-stage load-vs-capacity bars with
+   * the bottleneck flagged, and an in-flight vs shipped readout — drawn on
+   * its OWN screen-space canvas (never inside the world zoom/pan). It is
+   * fed from the SAME rAF loop that advances flowsim (no competing loop):
+   * flowFrame() samples + redraws it, throttled to a few Hz; Step / Reset /
+   * Pause force an immediate redraw so a paused view shows the last frame.
+   * Everything SYNTHETIC and labelled; the pure data/geometry live in
+   * kpicharts.js (verify_kpicharts.js covers them headlessly).
+   * ------------------------------------------------------------------ */
+  const KPI_HIST_MAX = 180; // rolling throughput window (samples)
+  const KPI_DRAW_MS = 130; // cockpit redraw throttle (~7-8 Hz)
+
+  function kpiTheme() {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function resetKpiHistory() {
+    state.flow.kpiHist = [];
+    state.flow.kpiBase = 0;
+    state.flow.kpiLastDraw = 0;
+  }
+
+  // Record one {tick, completed} sample; drop the oldest past the window,
+  // carrying its completed count into the baseline so the displayed buckets
+  // stay honest (they telescope from the baseline, never a giant first bar).
+  function sampleFlowKpis() {
+    const s = state.flow.sim;
+    if (!s) return;
+    const h = state.flow.kpiHist;
+    const last = h[h.length - 1];
+    if (last && last.tick === s.tick && last.completed === s.completed) return;
+    h.push({ tick: s.tick, completed: s.completed });
+    while (h.length > KPI_HIST_MAX) {
+      const dropped = h.shift();
+      state.flow.kpiBase = dropped.completed;
+    }
+  }
+
+  function drawFlowKpis() {
+    if (!WT.kpicharts) return;
+    const canvas = $("flowKpiCanvas");
+    if (!canvas || typeof canvas.getContext !== "function") return;
+    const data = WT.kpicharts.series(state.flow.sim, {
+      history: state.flow.kpiHist,
+      baselineCompleted: state.flow.kpiBase,
+      playing: state.flow.playing,
+    });
+    try { WT.kpicharts.drawDashboard(canvas, data, { theme: kpiTheme() }); } catch (_) { /* defensive */ }
+  }
+
   function wireFlowControls() {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
     on("flowPlayBtn", flowPlay);
@@ -745,6 +816,7 @@
       });
     }
     updateFlowButtons();
+    drawFlowKpis(); // initial paint: the cockpit shows its "press Play" prompt
   }
 
   /* ------------------------------------------------------------------
@@ -3682,11 +3754,12 @@
     registerSW();
 
     // responsive + theme
-    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("resize", () => { resizeCanvas(); drawFlowKpis(); });
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(() => {
       COLORS = themeColors();
       render();
+      drawFlowKpis(); // repaint the cockpit in the new theme
     });
   }
 

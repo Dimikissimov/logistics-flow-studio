@@ -360,6 +360,15 @@
           <input id="flowSpeed" type="range" min="0.25" max="4" step="0.25" value="1" aria-label="Animation speed multiplier" />
         </div>
         <div id="flowReadout" class="flow-readout"><p class="empty">Press Play (or Step) to animate boxes moving through the warehouse. Pause returns to the normal edit view.</p></div>
+        <!-- P3.1: Live KPI dashboard — a compact "plant-sim cockpit" strip
+             (kpicharts.js) that updates in real time from the SAME rAF loop
+             that runs the flow animation. Throughput-over-time, the 7-stage
+             load-vs-capacity bars (bottleneck flagged) and an in-flight vs
+             shipped readout. Screen-space, outside the world zoom/pan. -->
+        <div class="flow-kpis" id="flowKpis">
+          <canvas id="flowKpiCanvas" class="flow-kpi-canvas" role="img" aria-label="Live KPI dashboard: throughput over time, per-stage load vs capacity with the bottleneck flagged, and in-flight vs shipped counts. Synthetic, grounded in ISO 22400 / a heuristic model — not measured, not a certification.">Live KPI dashboard (requires a canvas-capable browser).</canvas>
+          <p class="flow-kpi-cap"><strong>SYNTHETIC live KPIs</strong> — grounded in ISO 22400 / a heuristic model, <strong>not measured</strong> and not a certification. Charts are 0-based and honestly scaled; the palette is colourblind-safe and every bar is directly labelled. Updates while the flow plays; shows the last frame when paused.</p>
+        </div>
       </section>
 
       <!-- P3: unit-load catalog (pallets, cartons, totes) -->
@@ -493,6 +502,7 @@
   <script src="data.js"></script>
   <script src="wms.js"></script>
   <script src="flowsim.js"></script>
+  <script src="kpicharts.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
