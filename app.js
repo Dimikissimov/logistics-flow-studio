@@ -76,6 +76,10 @@
     complianceHighlight: null, // element ids highlighted from a Compliance Check finding
     showHeat: false, // pick-traffic heatmap overlay toggle
     panMode: false, // view hand/pan mode (toolbar toggle)
+    // View mode: "top" = the accurate, EDITABLE top-down floor plan (the
+    // source of truth); "iso" = the ILLUSTRATIVE 2.5D isometric
+    // presentation (iso.js) - viewing/animation only, no element editing.
+    viewMode: "top",
     history: [], // run history rows (session-only, see pushHistory)
     historyN: 0, // monotonically increasing run number for the table
     // AI Environment Generator (generate.js + nlcommands.js).
@@ -137,6 +141,46 @@
   // through this pair so zoom/pan can never desynchronise them.
   function worldToScreen(wx, wy) { return V.worldToScreen(view, wx, wy); }
   function screenToWorld(sx, sy) { return V.screenToWorld(view, sx, sy); }
+
+  // ----- 2.5D isometric presentation (iso.js) --------------------------
+  // Centring origin (canvas base-px) of the projected iso scene, recomputed
+  // each frame in iso mode so the diamond sits inside the SAME base-px floor
+  // box that Fit/100% frame - which is why zoom/pan/Fit all keep working.
+  let isoOx = 0, isoOy = 0;
+
+  // Map a WORLD cell (cx, cy) at height cz (metres) to canvas base-px. In
+  // top-down this is the plain world*cellPx mapping; in iso it routes
+  // through WT.iso.project + the centring origin. Used for the animated
+  // flow MUs/stations so they land in whichever scene is on screen.
+  function projPx(cx, cy, cz) {
+    if (state.viewMode === "iso" && WT.iso) {
+      const p = WT.iso.project(cx, cy, cz || 0);
+      return { x: isoOx + p.x * cellPx, y: isoOy + p.y * cellPx };
+    }
+    return { x: cx * cellPx, y: cy * cellPx };
+  }
+
+  // Compute the iso centring origin: project the floor's ground diamond
+  // (plus the tallest element's rise) and centre that extent inside the
+  // [0..GRID_W] x [0..GRID_H] base-px floor box.
+  function computeIsoOrigin() {
+    if (!WT.iso) return { x: 0, y: 0 };
+    const K = WT.iso.ISO;
+    let maxH = 1;
+    for (const e of state.elements) maxH = Math.max(maxH, WT.iso.elementHeight(e.type));
+    const corners = [[0, 0], [GRID_W, 0], [0, GRID_H], [GRID_W, GRID_H]];
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const [cx, cy] of corners) {
+      const p = WT.iso.project(cx, cy, 0);
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    minY -= maxH * K.KZ; // towers rise upward (negative y)
+    const spanX = maxX - minX, spanY = maxY - minY;
+    const ox = (GRID_W - spanX) / 2 - minX;
+    const oy = (GRID_H - spanY) / 2 - minY;
+    return { x: ox * cellPx, y: oy * cellPx };
+  }
 
   // Keep the pan within reasonable bounds of the content and the scale in
   // its clamp (called after any zoom/pan/resize before rendering).
@@ -220,6 +264,19 @@
     ctx.save();
     ctx.translate(view.panX, view.panY);
     ctx.scale(view.scale, view.scale);
+
+    // 2.5D ISOMETRIC presentation mode: draw the whole scene as extruded
+    // iso blocks and return early. It lives inside the SAME pan/scale
+    // transform as the top-down path, so zoom/pan/Fit compose unchanged.
+    // The heatmap/compliance/aisle overlays are intentionally SKIPPED in
+    // iso (they are accurate top-down aids) - stated in the README.
+    if (state.viewMode === "iso") {
+      renderIsoWorld();
+      ctx.restore();
+      if (state.flow && state.flow.on) drawFlowLegend();
+      updateBadges(aisleViolations(), D.analyzeChains(state.elements));
+      return;
+    }
 
     // Floor background (the warehouse footprint itself).
     ctx.fillStyle = COLORS.bg;
@@ -407,6 +464,39 @@
   }
 
   /* ------------------------------------------------------------------
+   * 2.5D isometric world-space drawing. Delegates the floor + extruded
+   * blocks to the pure/renderer module (WT.iso.drawScene) and then draws
+   * the live flow MUs + station queues projected into the same scene
+   * (via projPx, which reads the origin we set here). This runs INSIDE
+   * the pan/scale transform, so the whole iso scene zooms and pans.
+   * Honest scope: iso is ILLUSTRATIVE (heights are illustrative defaults,
+   * NOT a survey and NOT a BIM model); the top-down view stays the
+   * accurate, editable source of truth.
+   * ------------------------------------------------------------------ */
+  function renderIsoWorld() {
+    if (!WT.iso) return;
+    const org = computeIsoOrigin();
+    isoOx = org.x;
+    isoOy = org.y;
+    WT.iso.drawScene(ctx, {
+      elements: state.elements,
+      gridW: GRID_W,
+      gridH: GRID_H,
+      cellPx,
+      originX: isoOx,
+      originY: isoOy,
+      colors: COLORS,
+      elementDefs: ELEMENTS,
+      selectedId: state.selectedId,
+      shortLabel,
+    });
+    // Live material-flow overlay, projected into the iso scene. Drawn
+    // AFTER the blocks so the animation stays visible (an honest,
+    // illustrative overlay - not true per-pixel occlusion).
+    if (state.flow && state.flow.on) { drawFlowStations(); drawFlowMUs(); }
+  }
+
+  /* ------------------------------------------------------------------
    * W3: floor-plan underlay drawing + geometry.
    * The image is anchored at (offMx, offMy) metres from the grid origin
    * and scaled by mPerPx (metres per image pixel). Calibration: the
@@ -583,7 +673,11 @@
     ctx.save();
     ctx.lineWidth = 1;
     for (const mu of s.mus) {
-      const px = mu.cx * cellPx, py = mu.cy * cellPx;
+      // World cell -> base-px. In iso mode this projects the MU (raised a
+      // little off the floor) into the isometric scene; in top-down it is
+      // the plain world*cellPx mapping.
+      const c = projPx(mu.cx, mu.cy, 0.3);
+      const px = c.x, py = c.y;
       roundRect(px - half, py - half, size, size, r);
       ctx.fillStyle = colors[mu.stage] || COLORS.flow;
       ctx.globalAlpha = mu.stage === "shipping" ? 0.98 : 0.9;
@@ -611,7 +705,8 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (const st of s.stations) {
-      const px = st.x * cellPx, py = st.y * cellPx;
+      const c = projPx(st.x, st.y, 0.1);
+      const px = c.x, py = c.y;
       const q = st.queue.length;
       const col = q >= thr ? (cong.high || COLORS.violation)
         : q >= thr * 0.5 ? (cong.mid || COLORS.io)
@@ -1168,6 +1263,11 @@
   // mouse button, held Space, or the toolbar Pan toggle. Chosen so normal
   // left-drag element moves are never hijacked.
   function isPanGesture(e) {
+    // In 2.5D iso mode the floor is presentation-only: no placing, no
+    // selecting, no dragging elements. Every drag is treated as a pan so
+    // the scene stays navigable while editing is disabled (the element
+    // hit-test is top-down-only, which keeps iso simple and honest).
+    if (state.viewMode === "iso") return true;
     return e.button === 1 || spaceHeld || state.panMode;
   }
 
@@ -1274,6 +1374,7 @@
   // ================================================================
   // The cursor to show when idle (grab when in a pan mode, else default).
   function viewCursor() {
+    if (state.viewMode === "iso") return "grab"; // iso: drag pans, no editing
     if (state.activeTool) return "copy";
     if (spaceHeld || state.panMode) return "grab";
     return "crosshair";
@@ -1340,6 +1441,43 @@
   function updateZoomBadge() {
     const z = $("zoomBadge");
     if (z) z.textContent = Math.round(view.scale * 100) + "%";
+  }
+
+  // ================================================================
+  // VIEW MODE: top-down (editable) <-> 2.5D isometric (presentation)
+  // ================================================================
+  // Toggle between the accurate, EDITABLE top-down floor plan and the
+  // ILLUSTRATIVE 2.5D isometric presentation. Only the RENDERING changes -
+  // the underlying elements/config are never touched - so flipping back
+  // and forth is a pure no-op on the layout (verified in verify_iso.js).
+  function setViewMode(mode) {
+    const iso = mode === "iso";
+    state.viewMode = iso ? "iso" : "top";
+    const b = $("isoBtn");
+    if (b) {
+      b.classList.toggle("active", iso);
+      b.setAttribute("aria-pressed", String(iso));
+      b.textContent = iso ? "2.5D on" : "2.5D view";
+    }
+    if (iso) {
+      // Editing is disabled in the presentation view: drop any in-flight
+      // edit affordances so nothing looks clickable (view-only). None of
+      // this changes state.elements/state.config.
+      if (state.activeTool) setTool(null);
+      state.preview = null;
+      state.complianceHighlight = null;
+      state.panMode = false;
+      const pb = $("panBtn");
+      if (pb) { pb.classList.remove("active"); pb.setAttribute("aria-pressed", "false"); }
+    }
+    canvas.style.cursor = viewCursor();
+    status(iso
+      ? "2.5D isometric view — ILLUSTRATIVE presentation (heights are illustrative defaults, not surveyed). Editing is disabled here; drag to pan, zoom/Fit still work. Switch off 2.5D to edit."
+      : "Top-down editable view — the accurate source of truth.");
+    render();
+  }
+  function toggleViewMode() {
+    setViewMode(state.viewMode === "iso" ? "top" : "iso");
   }
 
   // Mouse-wheel zoom, centred on the cursor. Non-passive so we can stop
@@ -1577,6 +1715,10 @@
   }
 
   function setTool(type) {
+    // Placing an element is an EDIT: if the user picks a palette tool while
+    // in the 2.5D presentation view, auto-switch back to the editable
+    // top-down view so the placement actually lands (iso is view-only).
+    if (type && state.viewMode === "iso") setViewMode("top");
     state.activeTool = type;
     document.querySelectorAll(".pal-item").forEach((b) => {
       b.classList.toggle("active", b.dataset.type === type);
@@ -4113,6 +4255,7 @@
     on("zoomFitBtn", fitToFloor);
     on("zoom100Btn", resetZoom);
     on("panBtn", togglePanMode);
+    on("isoBtn", toggleViewMode);
     on("floorApplyBtn", applyFloorSizeFromInputs);
     // Enter in a floor-size field applies immediately.
     ["floorWInput", "floorHInput"].forEach((id) => {

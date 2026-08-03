@@ -95,6 +95,17 @@
  *      waypoints lying on conveyor cells, a monotonically growing queue when
  *      arrivals exceed service, queues draining to empty at the wms-tied
  *      rates, in-bounds MUs/queues, and the SYNTHETIC / NOT-a-DES honesty.
+ *  17. verify_iso.js         - 2.5D isometric presentation projection: the
+ *      pure 2:1-dimetric project() is deterministic and satisfies the iso
+ *      invariants (+x -> right+down, +y -> left+down, +z raises screen-y,
+ *      linear so collinear stays collinear, KX:KY = 2:1, a known cell maps
+ *      to the expected offset), elementHeight is positive+finite for every
+ *      element type and reuses the domain heightM (single source of truth,
+ *      shared with the IFC export), the HEIGHTS fallback covers every type,
+ *      the painter's depth sort orders a known set back-to-front (stable,
+ *      non-mutating), the iso pure pipeline never mutates the layout (the
+ *      view-mode toggle is a no-op on state), and the illustrative / NOT a
+ *      BIM model honesty labels are present.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -121,6 +132,7 @@ const HARNESSES = [
   { name: "viewport transform + floor size (verify_view.js)", args: ["verify_view.js"] },
   { name: "SKU master + order pool data layer (verify_wmsdata.js)", args: ["verify_wmsdata.js"] },
   { name: "Material-flow realism: stations/queues/conveyor (verify_flowB.js)", args: ["verify_flowB.js"] },
+  { name: "2.5D isometric presentation projection (verify_iso.js)", args: ["verify_iso.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

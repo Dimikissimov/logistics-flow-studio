@@ -279,6 +279,7 @@
           <button id="zoomFitBtn" class="btn small" type="button" title="Fit the whole warehouse to the view (0 key)">Fit</button>
           <button id="zoom100Btn" class="btn small" type="button" title="Reset to 100% (1:1)">100%</button>
           <button id="panBtn" class="btn small" type="button" aria-pressed="false" title="Pan / hand mode: drag to move the view. Also works with middle-mouse drag, or hold Space and drag. Arrow keys pan when nothing is selected.">Pan</button>
+          <button id="isoBtn" class="btn small" type="button" aria-pressed="false" title="2.5D isometric view: an ILLUSTRATIVE 'plant-sim' style presentation where every element is drawn with height as an extruded iso block. Presentation/animation only — heights are illustrative defaults, editing is disabled. Composes with zoom, pan and Fit. Switch back for the accurate, editable top-down view.">2.5D view</button>
         </div>
         <div class="floor-group" role="group" aria-label="Warehouse size in metres">
           <label for="floorWInput">Floor</label>
@@ -554,6 +555,7 @@
   <script src="flowsim.js"></script>
   <script src="kpicharts.js"></script>
   <script src="wmsdata.js"></script>
+  <script src="iso.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

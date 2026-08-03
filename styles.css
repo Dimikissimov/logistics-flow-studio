@@ -233,6 +233,14 @@ a.btn.app-link { color: var(--accent); border-color: color-mix(in srgb, var(--ac
 .zoom-group #zoomBadge { min-width: 3.1em; text-align: center; }
 .btn.small.icon { min-width: 26px; padding: 3px 8px; font-weight: 700; line-height: 1; }
 .btn.small.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 2.5D presentation-mode toggle: reads as a clearly "on" filled state so
+   it is obvious the floor is in the illustrative iso view (not editable). */
+#isoBtn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  outline: none;
+}
 .floor-group label { font-size: 0.72rem; color: var(--text-dim); }
 .floor-group .floor-x, .floor-group .floor-unit { font-size: 0.74rem; color: var(--text-dim); }
 .floor-num {
