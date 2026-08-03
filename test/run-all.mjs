@@ -86,6 +86,15 @@
  *      the sim consumes the pool (toDataset -> cfg.dataset) while the
  *      no-data FALLBACK stays the synthetic default, and the SYNTHETIC /
  *      on-device / heuristic honesty labels are present.
+ *  16. verify_flowB.js       - Material-flow realism (P3.2): pick/put/pack
+ *      stations as active FIFO servers whose service rates come from the
+ *      WT.wms stage capacities, conveyor-following polyline routing along
+ *      connected conveyor cells (with a straight-segment fallback), and
+ *      emergent queue congestion. Asserts determinism INCLUDING the station
+ *      queues, unit conservation counting queued MUs, conveyor-routed
+ *      waypoints lying on conveyor cells, a monotonically growing queue when
+ *      arrivals exceed service, queues draining to empty at the wms-tied
+ *      rates, in-bounds MUs/queues, and the SYNTHETIC / NOT-a-DES honesty.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -111,6 +120,7 @@ const HARNESSES = [
   { name: "Live KPI dashboard (verify_kpicharts.js)", args: ["verify_kpicharts.js"] },
   { name: "viewport transform + floor size (verify_view.js)", args: ["verify_view.js"] },
   { name: "SKU master + order pool data layer (verify_wmsdata.js)", args: ["verify_wmsdata.js"] },
+  { name: "Material-flow realism: stations/queues/conveyor (verify_flowB.js)", args: ["verify_flowB.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

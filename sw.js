@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v21"; // Real-data layer: SKU master + order pool (wmsdata.js added; index/app/styles changed)
+const CACHE_VERSION = "wt-v22"; // P3.2 material-flow realism: pick/put/pack stations, conveyor-following routing + queue congestion (flowsim/app changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.

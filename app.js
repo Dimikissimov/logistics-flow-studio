@@ -106,9 +106,11 @@
     const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     return dark
       ? { bg: "#0e1626", void: "#080d17", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171", heat: "#fb923c",
-          flowStages: { receiving: "#60a5fa", storage: "#c084fc", picking: "#fbbf24", packing: "#2dd4bf", shipping: "#4ade80" } }
+          flowStages: { receiving: "#60a5fa", storage: "#c084fc", picking: "#fbbf24", packing: "#2dd4bf", shipping: "#4ade80" },
+          flowCongest: { low: "#4ade80", mid: "#fbbf24", high: "#f87171" } }
       : { bg: "#ffffff", void: "#eef2f7", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626", heat: "#c2410c",
-          flowStages: { receiving: "#2563eb", storage: "#9333ea", picking: "#d97706", packing: "#0d9488", shipping: "#16a34a" } };
+          flowStages: { receiving: "#2563eb", storage: "#9333ea", picking: "#d97706", packing: "#0d9488", shipping: "#16a34a" },
+          flowCongest: { low: "#16a34a", mid: "#d97706", high: "#dc2626" } };
   }
   let COLORS = themeColors();
 
@@ -387,7 +389,9 @@
     // P3: live material-flow MUs (animated boxes). Drawn in WORLD space,
     // inside the same transform as every other overlay, so zoom / pan /
     // Fit all apply and the boxes stay glued to the floor.
-    if (state.flow && state.flow.on) drawFlowMUs();
+    // P3.2: pick/put/pack station rings + queue-count badges are drawn
+    // first (under the boxes) in the SAME world transform (zoom/pan-safe).
+    if (state.flow && state.flow.on) { drawFlowStations(); drawFlowMUs(); }
 
     // 3) Leave WORLD space back to screen CSS pixels.
     ctx.restore();
@@ -559,12 +563,20 @@
   const FLOW_BASE_DT = 1; // sim ticks advanced per animation frame at speed 1
   const FLOW_STEP_TICKS = 8; // ticks advanced by a single "Step" press
 
-  // Draw the live MUs as small rounded boxes, colour-coded by stage.
+  // Congestion threshold (queue length at/above which a station is "hot").
+  function flowCongestThreshold() {
+    return (WT.flowsim && WT.flowsim.PARAMS && WT.flowsim.PARAMS.congestQueueThreshold) || 6;
+  }
+
+  // Draw the live MUs as small rounded boxes, colour-coded by stage. MUs
+  // waiting in a CONGESTED station queue get a red congestion outline.
   // World-space math (world cell * cellPx) so the transform scales them.
   function drawFlowMUs() {
     const s = state.flow.sim;
     if (!s || !s.mus || !s.mus.length) return;
     const colors = COLORS.flowStages || {};
+    const cong = COLORS.flowCongest || {};
+    const thr = flowCongestThreshold();
     const size = Math.max(3.2, cellPx * 0.5); // world px (transform scales it)
     const half = size / 2;
     const r = Math.min(3, size * 0.28);
@@ -576,11 +588,61 @@
       ctx.fillStyle = colors[mu.stage] || COLORS.flow;
       ctx.globalAlpha = mu.stage === "shipping" ? 0.98 : 0.9;
       ctx.fill();
-      ctx.globalAlpha = 0.45;
-      ctx.strokeStyle = COLORS.text;
+      // A queued MU whose station is congested is outlined in the
+      // congestion colour so a growing queue reads as "hot" at a glance.
+      const hot = mu.status === "queued" && mu.station && mu.station.queue.length >= thr;
+      if (hot) { ctx.globalAlpha = 0.85; ctx.strokeStyle = cong.high || COLORS.violation; ctx.lineWidth = 1.4; }
+      else { ctx.globalAlpha = 0.45; ctx.strokeStyle = COLORS.text; ctx.lineWidth = 1; }
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Draw each pick/put/pack STATION as a ring with a live queue-count badge,
+  // coloured by congestion level (queue length vs the threshold). Drawn in
+  // WORLD space inside the same transform as the MUs, so it is zoom/pan-safe.
+  function drawFlowStations() {
+    const s = state.flow.sim;
+    if (!s || !s.stations || !s.stations.length) return;
+    const cong = COLORS.flowCongest || {};
+    const thr = flowCongestThreshold();
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const st of s.stations) {
+      const px = st.x * cellPx, py = st.y * cellPx;
+      const q = st.queue.length;
+      const col = q >= thr ? (cong.high || COLORS.violation)
+        : q >= thr * 0.5 ? (cong.mid || COLORS.io)
+        : (cong.low || COLORS.flow);
+      const rad = Math.max(4, cellPx * 0.42);
+      // Station marker: a rounded ring, filled brighter as it congests.
+      roundRect(px - rad, py - rad, rad * 2, rad * 2, 3);
+      ctx.fillStyle = hexA(col, q >= thr ? 0.28 : 0.14);
+      ctx.fill();
+      ctx.lineWidth = q >= thr ? 2.4 : 1.4;
+      ctx.strokeStyle = col;
+      ctx.stroke();
+      // Kind initial (P-ut / P-ick / P-ack -> u / i / a) so the three
+      // station roles stay distinguishable without relying on colour.
+      const glyph = st.kind === "put" ? "U" : st.kind === "pick" ? "I" : "A";
+      const gfs = Math.max(6, Math.round(rad * 0.9));
+      ctx.fillStyle = col;
+      ctx.font = "700 " + gfs + "px system-ui, sans-serif";
+      ctx.fillText(glyph, px, py + 0.5);
+      // Live queue-count badge above the station when anything is waiting.
+      if (q > 0) {
+        const bh = Math.max(9, cellPx * 0.34), bw = Math.max(13, ctx.measureText(String(q)).width + 8);
+        const bx = px - bw / 2, by = py - rad - bh - 2;
+        roundRect(bx, by, bw, bh, 3);
+        ctx.fillStyle = col;
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "700 " + Math.max(7, Math.round(bh * 0.7)) + "px system-ui, sans-serif";
+        ctx.fillText(String(q), px, by + bh / 2 + 0.5);
+      }
+    }
     ctx.restore();
   }
 
@@ -591,8 +653,9 @@
     if (!s || !WT.flowsim) return;
     const stages = WT.flowsim.STAGES;
     const colors = COLORS.flowStages || {};
-    const pad = 8, sw = 10, rowH = 15, w = 190;
-    const h = 22 + stages.length * rowH + 18;
+    const pad = 8, sw = 10, rowH = 15, w = 210;
+    const hasStations = !!(s.stations && s.stations.length);
+    const h = 22 + stages.length * rowH + 18 + (hasStations ? 13 : 0);
     const x0 = 8, y0 = viewCssH - h - 8;
     ctx.save();
     ctx.globalAlpha = 0.94;
@@ -626,6 +689,13 @@
     ctx.fillStyle = COLORS.dim;
     ctx.font = "500 9px system-ui, sans-serif";
     ctx.fillText("in-flight " + s.inflight + " · shipped " + s.completed, x0 + pad, y + 2);
+    // P3.2: queue congestion readout (max queue + congested station count).
+    if (s.stations && s.stations.length) {
+      const thr = flowCongestThreshold();
+      const hot = (s.congestedStations || 0) > 0;
+      ctx.fillStyle = hot ? (COLORS.flowCongest && COLORS.flowCongest.high) || COLORS.violation : COLORS.dim;
+      ctx.fillText("max queue " + (s.maxQueue || 0) + " · congested " + (s.congestedStations || 0) + "/" + s.stations.length + " (≥" + thr + ")", x0 + pad, y + 13);
+    }
     ctx.restore();
   }
 
@@ -754,11 +824,16 @@
       const label = st.charAt(0).toUpperCase() + st.slice(1);
       return '<span class="flow-chip flow-' + st + '">' + label + ' <strong>' + n + "</strong></span>";
     }).join("");
+    const hasStations = !!(s.stations && s.stations.length);
+    const queueTxt = hasStations
+      ? " · queued <strong>" + (s.queued || 0) + "</strong> · max queue <strong>" + (s.maxQueue || 0) +
+        "</strong> · congested " + (s.congestedStations || 0) + "/" + s.stations.length
+      : "";
     out.innerHTML =
       '<div class="flow-chips">' + chips + "</div>" +
       '<p class="flow-stats">In-flight <strong>' + s.inflight + "</strong> · Shipped <strong>" + s.completed +
       "</strong> · tick " + s.tick + " · bottleneck throughput ~" + s.plan.lineThroughput.toFixed(0) + " units/hr" +
-      (state.flow.playing ? "" : " · paused") + "</p>";
+      queueTxt + (state.flow.playing ? "" : " · paused") + "</p>";
   }
 
   /* ------------------------------------------------------------------
