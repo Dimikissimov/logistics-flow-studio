@@ -183,6 +183,56 @@
         <input id="ordCsvInput" type="file" accept=".csv,text/csv" hidden />
       </section>
 
+      <!-- Real-data layer (direction A): a first-class SKU MASTER + ORDER
+           POOL that the material-flow sim and the WMS ops layer consume.
+           Generate a seeded SYNTHETIC catalogue, or import your own / a
+           Siemens-exported CSV, and export both. Generated data is
+           synthetic + labelled; imported data is yours and stays on this
+           device. Pure model in wmsdata.js (WT.wmsdata); with nothing
+           loaded the sim uses the synthetic default, exactly as before. -->
+      <section class="card" id="wmsDataCard">
+        <h2 class="card-title">SKU &amp; order data <span id="wmsDataLock"></span></h2>
+        <div class="gen-honesty">
+          <strong>A real-data layer: SKU master + order pool.</strong> Generate a
+          <strong>SYNTHETIC, seeded</strong> catalogue — velocity &amp; ABC come from a transparent
+          Pareto&nbsp;/&nbsp;80-20 heuristic, <em>not measured demand</em> — or <strong>import your own</strong>
+          article/order CSV (a Siemens Plant Simulation WMS export works too). The material-flow sim and
+          WMS&nbsp;Operations run on it; with nothing loaded they use the synthetic default. <strong>Imported
+          data stays on this device</strong> — the app makes no network requests, so nothing is uploaded.
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="wmsDataSkew">Demand skew (Pareto)</label>
+            <input id="wmsDataSkew" type="number" value="1.0" min="0.4" max="2" step="0.1"
+                   title="Zipf exponent for the velocity curve. Higher = a sharper 80/20 (A-class carries even more of the demand)." />
+          </div>
+          <div class="field">
+            <label for="wmsDataMaxLines">Max lines / order</label>
+            <input id="wmsDataMaxLines" type="number" value="6" min="1" max="32" step="1"
+                   title="Each generated order has 1..this many lines (SKUs picked weighted by velocity, mirroring Siemens generateOrders)." />
+          </div>
+        </div>
+        <p class="hint">SKU count, order count and seed come from the <strong>Simulation</strong> panel (SKUs,
+          Orders, Seed) so the data stays coherent with your run. Click <em>Generate</em> to rebuild.</p>
+        <button id="wmsDataGenBtn" class="btn primary wide" type="button"
+                title="Build a seeded synthetic SKU master + order pool from the current SKUs / Orders / Seed / skew">Generate SKU master + orders</button>
+        <div class="btn-grid" style="margin-top:8px">
+          <button id="wmsImportSkuBtn" class="btn" type="button"
+                  title="Import a SKU master CSV (sku,description,abc_class,velocity,weight_kg,storage_type — tolerant of aliases like article / frequency). Full version.">Import SKUs (CSV)…</button>
+          <button id="wmsImportOrdBtn" class="btn" type="button"
+                  title="Import an order CSV (order_id,sku,qty). Every SKU must exist in the loaded master. Full version.">Import orders (CSV)…</button>
+        </div>
+        <div class="btn-grid" style="margin-top:6px">
+          <button id="wmsExportSkuBtn" class="btn" type="button" title="Download the loaded SKU master as an Excel-openable CSV (offline, nothing uploaded)">Export SKUs</button>
+          <button id="wmsExportOrdBtn" class="btn" type="button" title="Download the loaded order pool as an Excel-openable CSV (offline, nothing uploaded)">Export orders</button>
+        </div>
+        <button id="wmsDataResetBtn" class="btn wide" type="button" style="margin-top:6px" hidden>Reset to synthetic demo</button>
+        <div id="wmsDataErr" class="data-errors" hidden></div>
+        <div id="wmsDataStats" class="wmsdata-stats"><p class="empty">No data layer loaded — the sim uses the seeded synthetic default. Generate or import to see stats + a sample (first 50 rows only, for performance).</p></div>
+        <input id="wmsSkuCsvInput" type="file" accept=".csv,text/csv" hidden />
+        <input id="wmsOrdCsvInput" type="file" accept=".csv,text/csv" hidden />
+      </section>
+
       <!-- W3: floor-plan image underlay - trace a real hall. Full-tier
            feature, locked-but-visible in the demo. The image becomes a
            local dataURL via FileReader (offline, no canvas taint). -->
@@ -503,6 +553,7 @@
   <script src="wms.js"></script>
   <script src="flowsim.js"></script>
   <script src="kpicharts.js"></script>
+  <script src="wmsdata.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -78,6 +78,14 @@
  *      theme inputs both render, it runs on an examples and a generated
  *      layout, and the SYNTHETIC / NOT measured / NOT a certification /
  *      0-based labels are present.
+ *  15. verify_wmsdata.js     - the real-data layer (SKU master + order
+ *      pool): seeded generation is deterministic, ABC/velocity is
+ *      Pareto-shaped (A is ~20% of SKUs but a large, asserted share of
+ *      demand), order lines reference existing SKUs, CSV export->import
+ *      round-trips, a 20,000-SKU generate is fast and stats() correct,
+ *      the sim consumes the pool (toDataset -> cfg.dataset) while the
+ *      no-data FALLBACK stays the synthetic default, and the SYNTHETIC /
+ *      on-device / heuristic honesty labels are present.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -102,6 +110,7 @@ const HARNESSES = [
   { name: "Live material-flow animation (verify_flowsim.js)", args: ["verify_flowsim.js"] },
   { name: "Live KPI dashboard (verify_kpicharts.js)", args: ["verify_kpicharts.js"] },
   { name: "viewport transform + floor size (verify_view.js)", args: ["verify_view.js"] },
+  { name: "SKU master + order pool data layer (verify_wmsdata.js)", args: ["verify_wmsdata.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

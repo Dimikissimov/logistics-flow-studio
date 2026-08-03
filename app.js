@@ -59,6 +59,13 @@
     // layouts/share links - it lives in its own localStorage key.
     dataset: null,
     datasetMeta: null, // {fileNames, importedAt} for the honest banner
+    // Real-data layer (wmsdata.js): the generated/imported SKU master +
+    // order pool bundle that feeds state.dataset. `datasetKind` marks how
+    // the active dataset was produced ("generated" | "imported" | null)
+    // so the UI is honest (SYNTHETIC vs yours) and so generated data keeps
+    // the Simulation inputs editable (they drive the next Generate).
+    wmsBundle: null,
+    datasetKind: null,
     // W3 floor-plan underlay: image traced under the grid. The dataURL
     // is local (FileReader) and excluded from share links.
     underlay: { img: null, dataUrl: null, opacity: 0.45, visible: true, offMx: 0, offMy: 0, mPerPx: 0.1, persisted: false },
@@ -635,7 +642,12 @@
     readConfigFromUI();
     const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
     const layout = Object.assign(currentLayout(), { config: state.config });
-    state.flow.sim = WT.flowsim.state(layout, { seed: seed, loop: true });
+    const opts = { seed: seed, loop: true };
+    // Real-data layer: feed the animation the loaded pool's real size + line
+    // shape. With nothing loaded, opts is unchanged -> identical to before.
+    const shape = activeOrderShape();
+    if (shape) { opts.orders = shape.orders; opts.linesPerOrderMax = shape.linesPerOrderMax; }
+    state.flow.sim = WT.flowsim.state(layout, opts);
     state.flow.sig = flowSignature();
     resetKpiHistory(); // new sim -> counters restart at 0, so does the chart
     return true;
@@ -1783,6 +1795,26 @@
     return cfg;
   }
 
+  // Real-data layer -> the AGGREGATE order shape the flow animation and the
+  // WMS ops layer consume (a count + avg lines), so they never iterate the
+  // pool per frame. Returns null when no order pool is loaded, in which
+  // case flowsim/wms fall back to the synthetic default from config -
+  // byte-identical to before (guarded by verify_wmsdata.js).
+  function activeOrderShape() {
+    const ds = state.dataset;
+    if (!ds || !Array.isArray(ds.orders) || !ds.orders.length) return null;
+    if (WT.wmsdata && typeof WT.wmsdata.orderStreamShape === "function") {
+      const s = WT.wmsdata.orderStreamShape(
+        ds.orders.map((o) => ({ lines: o.lines })) // shape-only; avoids copying sku strings
+      );
+      if (s) return s;
+    }
+    let lines = 0;
+    for (const o of ds.orders) lines += o.lines.length;
+    const avg = lines / ds.orders.length;
+    return { orders: ds.orders.length, lineCount: lines, avgLinesPerOrder: avg, linesPerOrderMax: Math.max(1, Math.round(2 * avg - 1)) };
+  }
+
   // ---- Advisor -----------------------------------------------------
   function runAdvisor() {
     readConfigFromUI();
@@ -2082,12 +2114,23 @@
     readConfigFromUI();
     const out = $("wmsOut");
     const hours = Math.max(1, Math.round(Number($("wmsHoursInput").value) || 8));
-    const orders = Math.max(1, Math.round(Number($("wmsOrdersInput").value) || 300));
+    let orders = Math.max(1, Math.round(Number($("wmsOrdersInput").value) || 300));
     const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
     // Carry the current sim settings (strategy / SKUs / flow) so the
     // order-picking stage matches the Simulation panel's run; orders,
     // hours and seed from this panel override.
-    const layout = Object.assign(currentLayout(), { config: state.config });
+    const cfg = Object.assign({}, state.config);
+    // Real-data layer: when an order pool is loaded, the run uses its REAL
+    // order count + line shape (aggregate, not per-order) instead of the
+    // panel's Orders box. With nothing loaded this block is skipped and the
+    // run is exactly as before.
+    const shape = activeOrderShape();
+    if (shape) {
+      orders = shape.orders;
+      cfg.linesPerOrderMax = shape.linesPerOrderMax;
+      $("wmsOrdersInput").value = orders;
+    }
+    const layout = Object.assign(currentLayout(), { config: cfg });
     const result = WT.wms.runOperations(layout, { orders: orders, hours: hours, seed: seed });
     const kp = WT.wms.kpis(result, layout);
 
@@ -3255,7 +3298,25 @@
     const resetBtn = $("dataResetBtn");
     const skuIn = $("skuInput");
     const ordIn = $("ordersInput");
-    if (state.dataset) {
+    if (state.dataset && state.datasetKind === "generated") {
+      // Real-data layer, GENERATED: honest SYNTHETIC labelling; the
+      // Simulation inputs stay editable because they drive the next
+      // Generate (the sim itself replays the generated pool).
+      const st = state.dataset.stats;
+      badge.textContent =
+        "Data: synthetic layer — " + st.skuCount + " SKUs" +
+        (state.dataset.orders ? ", " + st.orderCount + " orders" : "");
+      badge.className = "badge muted";
+      badge.title =
+        "The sim runs on a GENERATED, seeded SYNTHETIC SKU master + order pool (the SKU & order data panel). " +
+        "Velocity + ABC are a transparent Pareto / 80-20 heuristic, not measured demand. " +
+        "Change SKUs / Orders / Seed and press Generate to rebuild it, or Reset to synthetic demo.";
+      resetBtn.hidden = true; // the generated layer has its own reset in the SKU & order data panel
+      skuIn.disabled = false;
+      skuIn.title = "";
+      ordIn.disabled = false;
+      ordIn.title = "";
+    } else if (state.dataset) {
       const st = state.dataset.stats;
       badge.textContent =
         "Data: yours — " + st.skuCount + " SKUs" +
@@ -3269,12 +3330,12 @@
           : "Order stream: synthetic seeded draws weighted by your real weekly picks - you did not import orders.") +
         " ABC classes: " + (state.dataset.classSource === "csv" ? "taken from your class column." : "recomputed 80/20 from your picks.") +
         " Nothing was uploaded - it all stays in this browser.";
-      resetBtn.hidden = false;
+      resetBtn.hidden = !(state.datasetKind === "imported" && !WT.wmsdata.isLoaded());
       skuIn.disabled = true;
-      skuIn.title = "SKU count comes from your imported article CSV (" + st.skuCount + " SKUs). Reset to demo data to edit.";
+      skuIn.title = "SKU count comes from your imported data (" + st.skuCount + " SKUs). Reset to demo data to edit.";
       ordIn.disabled = !!state.dataset.orders;
       ordIn.title = state.dataset.orders
-        ? "Order count comes from your imported order CSV (" + st.orderCount + " orders). Reset to demo data to edit."
+        ? "Order count comes from your imported order data (" + st.orderCount + " orders). Reset to demo data to edit."
         : "How many synthetic orders to draw from your pick frequencies.";
     } else {
       badge.textContent = "Data: synthetic demo";
@@ -3359,10 +3420,16 @@
         const names = pendingArtFile.name + (pendingOrdFile ? " + " + pendingOrdFile.name : "");
         state.dataset = ds;
         state.datasetMeta = { fileNames: names, importedAt: new Date().toISOString() };
+        state.datasetKind = "imported";
+        // This legacy importer owns state.dataset directly; clear the
+        // wmsdata layer so the two producers never show stale data.
+        state.wmsBundle = null;
+        if (WT.wmsdata) WT.wmsdata.clear();
         pendingArtFile = null;
         pendingOrdFile = null;
         saveDataset();
         updateDataUI();
+        renderWmsData();
         markKPIsStale();
         const clsTxt = ds.classSource === "csv" ? "classes from your class column" : "ABC classes recomputed 80/20 from your picks";
         toast("Imported " + names + " — " + ds.stats.skuCount + " SKUs" +
@@ -3379,14 +3446,19 @@
   }
 
   function resetDataset() {
-    if (!state.dataset) return;
+    if (!state.dataset && !state.wmsBundle) return;
     state.dataset = null;
     state.datasetMeta = null;
+    state.wmsBundle = null;
+    state.datasetKind = null;
+    if (WT.wmsdata) WT.wmsdata.clear();
     pendingArtFile = null;
     pendingOrdFile = null;
     try { localStorage.removeItem(DATA_KEY); } catch (_) {}
     clearDataErrors();
+    clearWmsDataErrors();
     updateDataUI();
+    renderWmsData();
     markKPIsStale();
     toast("Back to the seeded synthetic demo dataset.");
     status("Reset to demo data — the sim runs on the synthetic catalogue again.");
@@ -3394,9 +3466,15 @@
 
   function saveDataset() {
     try {
-      localStorage.setItem(DATA_KEY, JSON.stringify({ dataset: state.dataset, meta: state.datasetMeta }));
+      // Prefer persisting the compact wmsdata BUNDLE (the generated/imported
+      // SKU master + order pool) so the layer survives a reload; the legacy
+      // importer persists its dataset directly. Whichever is active wins.
+      const payload = state.wmsBundle
+        ? { wmsBundle: state.wmsBundle, meta: state.datasetMeta, kind: state.datasetKind }
+        : { dataset: state.dataset, meta: state.datasetMeta, kind: state.datasetKind };
+      localStorage.setItem(DATA_KEY, JSON.stringify(payload));
     } catch (_) {
-      toast("Could not persist your data (storage full/blocked) — it stays for this session only.", "warn");
+      toast("Could not persist the data layer (storage full/blocked) — it stays for this session only.", "warn");
     }
   }
 
@@ -3405,9 +3483,18 @@
       const raw = localStorage.getItem(DATA_KEY);
       if (!raw) return;
       const obj = JSON.parse(raw);
-      if (obj && obj.dataset && Array.isArray(obj.dataset.skus) && obj.dataset.skus.length) {
+      if (obj && obj.wmsBundle && Array.isArray(obj.wmsBundle.skuMaster) && obj.wmsBundle.skuMaster.length && WT.wmsdata) {
+        // Real-data layer: restore the bundle into wmsdata + derive the
+        // sim dataset via the same seam the panel uses.
+        WT.wmsdata.load(obj.wmsBundle);
+        state.wmsBundle = obj.wmsBundle;
+        state.dataset = WT.wmsdata.toDataset(obj.wmsBundle);
+        state.datasetMeta = obj.meta || null;
+        state.datasetKind = obj.kind || (obj.wmsBundle.source === "synthetic" ? "generated" : "imported");
+      } else if (obj && obj.dataset && Array.isArray(obj.dataset.skus) && obj.dataset.skus.length) {
         state.dataset = obj.dataset;
         state.datasetMeta = obj.meta || null;
+        state.datasetKind = obj.kind || "imported";
       }
     } catch (_) { /* unreadable -> stay synthetic */ }
   }
@@ -3425,6 +3512,243 @@
     });
     $("dataImportBtn").addEventListener("click", importUserData);
     $("dataResetBtn").addEventListener("click", resetDataset);
+  }
+
+  // ================================================================
+  // REAL-DATA LAYER: SKU master + order pool (wmsdata.js / WT.wmsdata)
+  // ----------------------------------------------------------------
+  // A first-class, PURE, deterministic data model the sim + WMS ops
+  // consume. Generate a seeded SYNTHETIC catalogue, or import your own /
+  // a Siemens-exported CSV, and export both. Everything flows through
+  // state.dataset (the seam simulation.js already reads), so the sim
+  // needs no change; with nothing loaded, every consumer is byte-
+  // identical to before (the synthetic default from state.config).
+  // ================================================================
+  let pendingSkuCsv = null;
+  let pendingOrdCsvW = null; // (distinct from the legacy importer's pendingOrdFile)
+
+  function showWmsDataErrors(title, errors) {
+    const out = $("wmsDataErr");
+    if (!out) return;
+    const lines = (WT.wmsdata && WT.wmsdata.formatErrors) ? WT.wmsdata.formatErrors(errors) : errors.map((e) => "row " + e.row + ": " + e.msg);
+    out.innerHTML =
+      "<strong>" + esc(title) + " — nothing was imported, the current data is unchanged:</strong>" +
+      "<ul>" + lines.map((l) => "<li>" + esc(l) + "</li>").join("") + "</ul>";
+    out.hidden = false;
+  }
+  function clearWmsDataErrors() {
+    const out = $("wmsDataErr");
+    if (!out) return;
+    out.hidden = true;
+    out.innerHTML = "";
+  }
+
+  // Load a bundle { skuMaster, orderPool, source, classSource, orderSource }
+  // as the active data layer: wmsdata store + state.dataset (via toDataset)
+  // + honest labels, then persist and refresh every consumer.
+  function applyWmsBundle(bundle, meta) {
+    WT.wmsdata.load(bundle);
+    state.wmsBundle = bundle;
+    state.dataset = WT.wmsdata.toDataset(bundle);
+    state.datasetMeta = meta || null;
+    state.datasetKind = (bundle.source === "synthetic" && bundle.orderSource !== "imported") ? "generated" : "imported";
+    clearWmsDataErrors();
+    saveDataset();
+    updateDataUI();
+    renderWmsData();
+    markKPIsStale();
+  }
+
+  function wmsDataGenerate() {
+    if (!WT.wmsdata) { toast("The data layer needs wmsdata.js.", "warn"); return; }
+    readConfigFromUI();
+    const skew = Math.max(0.4, Math.min(2, Number($("wmsDataSkew").value) || 1));
+    const maxLines = Math.max(1, Math.min(32, Math.round(Number($("wmsDataMaxLines").value) || 6)));
+    state.config.demandSkew = skew; // keep the sim/config coherent with the generated data
+    const nSku = Math.max(1, Math.round(Number(state.config.skuCount) || 80));
+    const nOrders = Math.max(1, Math.round(Number(state.config.orders) || 300));
+    const seed = Math.max(0, Math.round(Number(state.config.seed) || 0));
+    const bundle = WT.wmsdata.generate({ skuCount: nSku, orders: nOrders, seed: seed, demandSkew: skew, maxLines: maxLines });
+    bundle.orderSource = "generated";
+    applyWmsBundle(bundle, { fileNames: "generated (synthetic)", importedAt: new Date().toISOString() });
+    const st = state.dataset.stats;
+    toast("Generated a SYNTHETIC data layer — " + st.skuCount + " SKUs, " + st.orderCount + " orders (seed " + seed + ").");
+    status("SYNTHETIC SKU master + order pool active: " + st.skuCount + " SKUs (Pareto/80-20 velocity heuristic), " +
+      st.orderCount + " seeded orders. The sim + WMS ops now run on it. Reset to synthetic demo to go back.");
+  }
+
+  function readCsvFile(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(new Error("could not read " + file.name));
+      r.readAsText(file);
+    });
+  }
+
+  function wmsImportSkus() {
+    if (dataLocked()) return; // full-tier: importing your own data
+    if (!pendingSkuCsv) { toast("Choose a SKU CSV first (sku,description,abc_class,velocity,weight_kg,storage_type — aliases ok).", "warn"); return; }
+    if (pendingSkuCsv.size > (WT.data ? WT.data.LIMITS.maxFileBytes : 2 * 1024 * 1024)) {
+      showWmsDataErrors("File too large", [{ row: 0, msg: pendingSkuCsv.name + " exceeds the 2 MB per-file cap" }]);
+      return;
+    }
+    const name = pendingSkuCsv.name;
+    readCsvFile(pendingSkuCsv)
+      .then((text) => {
+        const res = WT.wmsdata.importSkusCsv(text);
+        if (!res.ok) { showWmsDataErrors("SKU CSV (" + name + ")", res.errors); return; }
+        pendingSkuCsv = null;
+        const bundle = { skuMaster: res.skus, orderPool: [], source: "imported", classSource: res.classSource, orderSource: null };
+        applyWmsBundle(bundle, { fileNames: name, importedAt: new Date().toISOString() });
+        toast("Imported " + res.skus.length + " SKUs from " + name + " — stays on this device.");
+        status("Your SKU master is active: " + res.skus.length + " SKUs (" +
+          (res.classSource === "csv" ? "ABC from your class column" : "ABC computed 80/20 from velocity") +
+          "). Import an order CSV to replay real orders, or run — the order stream is synthetic, weighted by your velocities.");
+      })
+      .catch((e) => toast("Import failed: " + e.message, "err"));
+  }
+
+  function wmsImportOrders() {
+    if (dataLocked()) return;
+    if (!WT.wmsdata.isLoaded()) { toast("Generate or import a SKU master first — orders must reference existing SKUs.", "warn"); return; }
+    if (!pendingOrdCsvW) { toast("Choose an order CSV first (order_id,sku,qty).", "warn"); return; }
+    if (pendingOrdCsvW.size > (WT.data ? WT.data.LIMITS.maxFileBytes : 2 * 1024 * 1024)) {
+      showWmsDataErrors("File too large", [{ row: 0, msg: pendingOrdCsvW.name + " exceeds the 2 MB per-file cap" }]);
+      return;
+    }
+    const name = pendingOrdCsvW.name;
+    readCsvFile(pendingOrdCsvW)
+      .then((text) => {
+        const res = WT.wmsdata.importOrdersCsv(text, WT.wmsdata.skuMaster);
+        if (!res.ok) { showWmsDataErrors("Order CSV (" + name + ")", res.errors); return; }
+        pendingOrdCsvW = null;
+        const prev = state.wmsBundle || { source: "imported", classSource: "computed" };
+        const bundle = { skuMaster: WT.wmsdata.skuMaster.slice(), orderPool: res.orders, source: prev.source, classSource: prev.classSource, orderSource: "imported" };
+        applyWmsBundle(bundle, { fileNames: (state.datasetMeta && state.datasetMeta.fileNames ? state.datasetMeta.fileNames + " + " : "") + name, importedAt: new Date().toISOString() });
+        const st = state.dataset.stats;
+        toast("Imported " + st.orderCount + " orders (" + st.lineCount + " lines) from " + name + ".");
+        status("Your order pool is active: the sim replays your " + st.orderCount + " orders over " + st.skuCount + " SKUs. Nothing left this device.");
+      })
+      .catch((e) => toast("Import failed: " + e.message, "err"));
+  }
+
+  function wmsExportSkus() {
+    if (!WT.wmsdata || !WT.wmsdata.isLoaded()) { toast("Generate or import a SKU master first, then export it.", "warn"); return; }
+    downloadFile("warehousetwin-skus.csv", WT.wmsdata.exportSkusCsv(), "text/csv");
+    toast("Exported the SKU master as CSV (offline — nothing uploaded).");
+  }
+  function wmsExportOrders() {
+    if (!WT.wmsdata || !WT.wmsdata.orderPool.length) { toast("Generate or import an order pool first, then export it.", "warn"); return; }
+    downloadFile("warehousetwin-orders.csv", WT.wmsdata.exportOrdersCsv(), "text/csv");
+    toast("Exported the order pool as CSV (offline — nothing uploaded).");
+  }
+
+  // Render stats() + a small SAMPLE (first N rows only — never the whole
+  // catalogue, so this stays instant even at tens of thousands of SKUs).
+  function renderWmsData() {
+    const box = $("wmsDataStats");
+    if (!box || !WT.wmsdata) return;
+    const loaded = WT.wmsdata.isLoaded();
+    const resetBtn = $("wmsDataResetBtn");
+    const impOrd = $("wmsImportOrdBtn");
+    const expSku = $("wmsExportSkuBtn");
+    const expOrd = $("wmsExportOrdBtn");
+    if (resetBtn) resetBtn.hidden = !loaded;
+    if (impOrd) impOrd.disabled = !loaded;
+    if (expSku) expSku.disabled = !loaded;
+    if (expOrd) expOrd.disabled = !(loaded && WT.wmsdata.orderPool.length);
+
+    if (!loaded) {
+      if (state.dataset) {
+        // The legacy "Import your data" panel owns the active dataset.
+        box.innerHTML =
+          '<p class="wmsdata-src yours">A dataset is active via <strong>Import your data</strong> (' +
+          esc(String(state.dataset.stats.skuCount)) + " SKUs). This panel manages the generate + CSV data layer; " +
+          "use it to build a synthetic catalogue or import a SKU/order CSV.</p>";
+      } else {
+        box.innerHTML = '<p class="empty">No data layer loaded — the sim uses the seeded synthetic default. Generate or import to see stats + a sample (first ' + WT.wmsdata.PARAMS.sampleRows + " rows only, for performance).</p>";
+      }
+      return;
+    }
+
+    const st = WT.wmsdata.stats();
+    const b = state.wmsBundle || {};
+    const skuSyn = b.source === "synthetic";
+    const orderSrc = b.orderSource; // "generated" | "imported" | null
+    const srcClass = skuSyn && orderSrc !== "imported" ? "synthetic" : "yours";
+    const skuLine = skuSyn
+      ? "<strong>SKUs: SYNTHETIC</strong> (generated, seeded — velocity + ABC from a transparent Pareto/80-20 heuristic, <em>not measured</em>)"
+      : "<strong>SKUs: yours</strong> (imported CSV, on this device — nothing uploaded)";
+    const ordLine = orderSrc === "imported"
+      ? "<strong>Orders: yours</strong> (imported CSV — the sim replays them exactly)"
+      : orderSrc === "generated"
+      ? "<strong>Orders: SYNTHETIC</strong> (seeded, SKUs drawn weighted by velocity — mirrors Siemens generateOrders)"
+      : "<strong>Orders: none</strong> (the sim draws a synthetic stream from the SKU velocities)";
+
+    const kpi = (lbl, val) => '<div class="k"><span class="lbl">' + esc(lbl) + '</span><span class="val">' + esc(val) + "</span></div>";
+    const fmt = (n) => Number(n).toLocaleString("en-US");
+    const kpis =
+      '<div class="wmsdata-kpis">' +
+      kpi("SKUs", fmt(st.skuCount)) +
+      kpi("Orders", st.orderCount ? fmt(st.orderCount) : "—") +
+      kpi("Order lines", st.lineCount ? fmt(st.lineCount) : "—") +
+      kpi("Avg lines/order", st.orderCount ? st.avgLinesPerOrder.toFixed(2) : "—") +
+      "</div>";
+
+    const abcRow = (k) => {
+      const c = st.abc[k];
+      return "<tr><td>" + k + "</td><td>" + fmt(c.skus) + " (" + c.skuPct.toFixed(1) + "%)</td><td>" + c.demandPct.toFixed(1) + "%</td></tr>";
+    };
+    const abcTable =
+      '<p class="wmsdata-cap">ABC split — a small share of SKUs carries most of the demand (Pareto):</p>' +
+      '<table class="cat-table"><thead><tr><th>Class</th><th>SKUs (share)</th><th>Demand share</th></tr></thead><tbody>' +
+      abcRow("A") + abcRow("B") + abcRow("C") + "</tbody></table>";
+
+    const N = WT.wmsdata.PARAMS.sampleRows;
+    const sample = WT.wmsdata.skuMaster.slice(0, N);
+    const sampleRows = sample
+      .map((s) => "<tr><td>" + esc(s.sku) + "</td><td>" + esc(s.abcClass) + "</td><td>" + fmt(s.velocity) + "</td><td>" + esc(String(s.weightKg)) + "</td><td>" + esc(s.storageType) + "</td></tr>")
+      .join("");
+    const sampleTable =
+      '<p class="wmsdata-cap">Sample — first ' + Math.min(N, st.skuCount) + " of " + fmt(st.skuCount) + " SKUs (the rest are not rendered, for performance):</p>" +
+      '<table class="cat-table sample"><thead><tr><th>SKU</th><th>ABC</th><th>Velocity</th><th>kg</th><th>Storage</th></tr></thead><tbody>' +
+      sampleRows + "</tbody></table>";
+
+    box.innerHTML =
+      '<div class="wmsdata-src ' + srcClass + '">' + skuLine + ". " + ordLine + ".</div>" +
+      kpis + abcTable + sampleTable;
+  }
+
+  function wireWmsDataPanel() {
+    if (!$("wmsDataGenBtn")) return;
+    $("wmsDataGenBtn").addEventListener("click", wmsDataGenerate);
+    $("wmsImportSkuBtn").addEventListener("click", () => { if (!dataLocked()) $("wmsSkuCsvInput").click(); });
+    $("wmsImportOrdBtn").addEventListener("click", () => {
+      if (!WT.wmsdata.isLoaded()) { toast("Generate or import a SKU master first — orders must reference existing SKUs.", "warn"); return; }
+      if (!dataLocked()) $("wmsOrdCsvInput").click();
+    });
+    $("wmsSkuCsvInput").addEventListener("change", (e) => {
+      if (e.target.files[0]) { pendingSkuCsv = e.target.files[0]; clearWmsDataErrors(); wmsImportSkus(); }
+      e.target.value = "";
+    });
+    $("wmsOrdCsvInput").addEventListener("change", (e) => {
+      if (e.target.files[0]) { pendingOrdCsvW = e.target.files[0]; clearWmsDataErrors(); wmsImportOrders(); }
+      e.target.value = "";
+    });
+    $("wmsExportSkuBtn").addEventListener("click", wmsExportSkus);
+    $("wmsExportOrdBtn").addEventListener("click", wmsExportOrders);
+    $("wmsDataResetBtn").addEventListener("click", resetDataset);
+    // Keep the generated data coherent with the Simulation panel's skew.
+    const skewIn = $("wmsDataSkew");
+    if (skewIn) skewIn.value = state.config.demandSkew;
+    // Gate the import buttons visually in the demo tier (padlock), like
+    // the legacy data panel; Generate + Export stay available.
+    const caps = WT.tiers.caps();
+    if (!caps.dataImportAllowed) {
+      const lk = $("wmsDataLock");
+      if (lk) lk.innerHTML = WT.tiers.padlockSVG();
+    }
   }
 
   // ================================================================
@@ -3737,10 +4061,12 @@
     buildExampleQuickPick();
     wireButtons();
     wireDataPanel();
+    wireWmsDataPanel();
     wireUnderlayPanel();
     loadDataset(); // W3: restore imported data + floor plan (their own keys)
     loadUnderlay();
     updateDataUI();
+    renderWmsData();
     updateUnderlayUI();
     pushConfigToUI();
     resizeCanvas();
