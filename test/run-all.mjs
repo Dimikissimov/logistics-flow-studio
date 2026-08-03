@@ -52,6 +52,12 @@
  *      22400 / standard practice, unit conservation, a more-docks/more-
  *      automation monotonic throughput sanity check, a bottleneck stage
  *      identified, and the SYNTHETIC + not-a-certification labels present.
+ *  12. verify_view.js         - viewport transform (zoom/pan/fit) + the
+ *      configurable floor: screenToWorld/worldToScreen round-trip at
+ *      several scales/pans, zoom clamped to bounds, Fit computed for a
+ *      known warehouse+viewport, grid-snap staying in world coords, a
+ *      non-40x24 floor accepted with correct bounds, and the hit-test
+ *      resolving the right element after a pan+zoom.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -73,6 +79,7 @@ const HARNESSES = [
   { name: "AI Environment Generator (verify_generate.js)", args: ["verify_generate.js"] },
   { name: "Example Scenarios + data export (verify_examples.js)", args: ["verify_examples.js"] },
   { name: "WMS Operations layer (verify_wms.js)", args: ["verify_wms.js"] },
+  { name: "viewport transform + floor size (verify_view.js)", args: ["verify_view.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

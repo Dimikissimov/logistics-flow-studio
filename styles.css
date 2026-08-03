@@ -218,6 +218,33 @@ a.btn.app-link { color: var(--accent); border-color: color-mix(in srgb, var(--ac
 .badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
 .badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 .badge.muted { color: var(--text-dim); }
+
+/* ---------------- View toolbar (zoom / pan / floor size) ---------------- */
+.view-toolbar { align-items: center; margin-top: -2px; }
+.zoom-group, .floor-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.zoom-group #zoomBadge { min-width: 3.1em; text-align: center; }
+.btn.small.icon { min-width: 26px; padding: 3px 8px; font-weight: 700; line-height: 1; }
+.btn.small.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+.floor-group label { font-size: 0.72rem; color: var(--text-dim); }
+.floor-group .floor-x, .floor-group .floor-unit { font-size: 0.74rem; color: var(--text-dim); }
+.floor-num {
+  width: 3.4em;
+  font-size: 0.74rem;
+  padding: 2px 5px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas-bg);
+  color: var(--text);
+}
 .canvas-wrap {
   background: var(--canvas-bg);
   border: 1px solid var(--border);

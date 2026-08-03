@@ -221,6 +221,24 @@
         <span id="dataBadge" class="badge muted" title="Which dataset the simulation runs on: the seeded synthetic demo catalogue, or your own imported CSVs (Import your data, left panel)">Data: synthetic demo</span>
         <button id="heatBtn" class="btn small" type="button" aria-pressed="false" title="Shade the floor by metres walked in the last run's pick tours. Goods-to-person picks (AS/RS, shuttle) add no walking, so they leave no trace.">Heatmap</button>
       </div>
+      <div class="canvas-toolbar view-toolbar">
+        <div class="zoom-group" role="group" aria-label="Zoom and pan the warehouse view">
+          <button id="zoomOutBtn" class="btn small icon" type="button" title="Zoom out (- key, or mouse wheel)" aria-label="Zoom out">&minus;</button>
+          <span id="zoomBadge" class="badge muted" title="Current zoom level">100%</span>
+          <button id="zoomInBtn" class="btn small icon" type="button" title="Zoom in (+ key, or mouse wheel)" aria-label="Zoom in">+</button>
+          <button id="zoomFitBtn" class="btn small" type="button" title="Fit the whole warehouse to the view (0 key)">Fit</button>
+          <button id="zoom100Btn" class="btn small" type="button" title="Reset to 100% (1:1)">100%</button>
+          <button id="panBtn" class="btn small" type="button" aria-pressed="false" title="Pan / hand mode: drag to move the view. Also works with middle-mouse drag, or hold Space and drag. Arrow keys pan when nothing is selected.">Pan</button>
+        </div>
+        <div class="floor-group" role="group" aria-label="Warehouse size in metres">
+          <label for="floorWInput">Floor</label>
+          <input id="floorWInput" class="floor-num" type="number" min="8" max="120" step="1" value="40" title="Warehouse width in metres (max 120)" aria-label="Warehouse width in metres" />
+          <span class="floor-x" aria-hidden="true">&times;</span>
+          <input id="floorHInput" class="floor-num" type="number" min="8" max="80" step="1" value="24" title="Warehouse depth in metres (max 80)" aria-label="Warehouse depth in metres" />
+          <span class="floor-unit">m</span>
+          <button id="floorApplyBtn" class="btn small" type="button" title="Resize the warehouse (up to 120 x 80 m). Existing elements are kept in bounds; anything that no longer fits is removed.">Resize</button>
+        </div>
+      </div>
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="floor" aria-label="Warehouse floor plan editor"></canvas>
       </div>
@@ -436,6 +454,7 @@
         layer in wms.js uses domain + sim; app reads the tier capability
         flags from tiers.js, the share-link codec from share.js, the IFC
         writer from ifc.js and the CSV import parser from data.js.) -->
+  <script src="view.js"></script>
   <script src="domain.js"></script>
   <script src="tiers.js"></script>
   <script src="simulation.js"></script>

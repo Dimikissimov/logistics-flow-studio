@@ -15,8 +15,23 @@
   const CELL_M = D.METRES_PER_CELL;
 
   // ---------------- Grid / floor definition ----------------
-  const GRID_W = 40; // cells across (metres)
-  const GRID_H = 24; // cells down (metres)
+  // Mutable so the warehouse can be resized (view.js clamps the range).
+  // The classic floor is 40 x 24 m; layouts may carry their own size.
+  const V = WT.view;
+  let GRID_W = V.FLOOR_DEFAULT_W; // cells across (metres)
+  let GRID_H = V.FLOOR_DEFAULT_H; // cells down (metres)
+
+  // ---------------- Viewport transform (zoom + pan) ----------------
+  // The one transform every draw call and every hit-test routes through
+  // (see worldToScreen / screenToWorld below). `cellPx` is the base
+  // pixels-per-cell at 100%; `scale` is the zoom multiplier.
+  const view = { scale: 1, panX: 0, panY: 0, cellPx: 20 };
+  let viewCssW = 800; // canvas viewport size in CSS px (set on resize)
+  let viewCssH = 480;
+  // Reference viewport shape: the classic 40 x 24 floor exactly fills the
+  // canvas at 100%, so the default layout looks identical to before.
+  const REF_COLS = V.FLOOR_DEFAULT_W;
+  const REF_ROWS = V.FLOOR_DEFAULT_H;
 
   // ---------------- Mutable state ----------------
   const state = {
@@ -53,6 +68,7 @@
     preview: null, // optimizer proposal: [{id,type,x,y,w,d}] shown as ghosts
     complianceHighlight: null, // element ids highlighted from a Compliance Check finding
     showHeat: false, // pick-traffic heatmap overlay toggle
+    panMode: false, // view hand/pan mode (toolbar toggle)
     history: [], // run history rows (session-only, see pushHistory)
     historyN: 0, // monotonically increasing run number for the table
     // AI Environment Generator (generate.js + nlcommands.js).
@@ -73,8 +89,8 @@
   function themeColors() {
     const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     return dark
-      ? { bg: "#0e1626", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171", heat: "#fb923c" }
-      : { bg: "#ffffff", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626", heat: "#c2410c" };
+      ? { bg: "#0e1626", void: "#080d17", grid: "#1c2942", gridStrong: "#2b3d5c", text: "#e2e8f0", dim: "#94a3b8", sel: "#38bdf8", violation: "#f87171", io: "#facc15", flow: "#2dd4bf", warnMark: "#f87171", heat: "#fb923c" }
+      : { bg: "#ffffff", void: "#eef2f7", grid: "#e8edf3", gridStrong: "#cbd5e1", text: "#0f172a", dim: "#64748b", sel: "#0284c7", violation: "#dc2626", io: "#ca8a04", flow: "#0d9488", warnMark: "#dc2626", heat: "#c2410c" };
   }
   let COLORS = themeColors();
 
@@ -91,12 +107,24 @@
     return state.elements.some((e) => e.id !== exceptId && rectsOverlap(cand, e));
   }
   function elementAt(cellX, cellY) {
-    // Topmost (last drawn) element containing the cell.
-    for (let i = state.elements.length - 1; i >= 0; i--) {
-      const e = state.elements[i];
-      if (cellX >= e.x && cellX < e.x + e.w && cellY >= e.y && cellY < e.y + e.d) return e;
-    }
-    return null;
+    // Topmost (last drawn) element containing the cell. Delegates to the
+    // shared, DOM-free hit-test so the editor and verify_view.js agree.
+    return V.elementAt(state.elements, cellX, cellY);
+  }
+
+  // -------- Viewport transform helpers (the single mapping) ----------
+  // Everything drawn on the canvas and every pointer hit-test goes
+  // through this pair so zoom/pan can never desynchronise them.
+  function worldToScreen(wx, wy) { return V.worldToScreen(view, wx, wy); }
+  function screenToWorld(sx, sy) { return V.screenToWorld(view, sx, sy); }
+
+  // Keep the pan within reasonable bounds of the content and the scale in
+  // its clamp (called after any zoom/pan/resize before rendering).
+  function clampView() {
+    view.scale = V.clampScale(view.scale);
+    const p = V.clampPan(view, GRID_W, GRID_H, viewCssW, viewCssH, view.cellPx * 3);
+    view.panX = p.panX;
+    view.panY = p.panY;
   }
 
   // Aisle-width guard (informed by DIN 15185). Delegates to the single
@@ -125,14 +153,23 @@
   let cellPx = 20; // CSS px per cell (recomputed on resize)
 
   function resizeCanvas() {
-    const cssW = Math.max(280, canvasWrap.clientWidth);
-    cellPx = cssW / GRID_W;
-    const cssH = cellPx * GRID_H;
+    // Fixed-shape viewport (the classic 40 x 24 aspect) that fills the
+    // column width. The WORLD may be larger than this box — that is what
+    // zoom + pan are for. `cellPx` is the base px-per-cell at 100%: at
+    // scale 1 the reference 40-wide floor spans the full width, so the
+    // default layout is pixel-for-pixel what it always was.
+    const vw = Math.max(280, canvasWrap.clientWidth);
+    cellPx = vw / REF_COLS;
+    view.cellPx = cellPx;
+    const vh = REF_ROWS * cellPx;
+    viewCssW = vw;
+    viewCssH = vh;
     const dpr = window.devicePixelRatio || 1;
-    canvas.style.height = cssH + "px";
-    canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
+    canvas.style.height = vh + "px";
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    clampView();
     render();
   }
 
@@ -148,9 +185,23 @@
   }
 
   function render() {
-    const cssW = GRID_W * cellPx;
+    const cssW = GRID_W * cellPx; // floor extent in base (scale-1) px
     const cssH = GRID_H * cellPx;
-    ctx.clearRect(0, 0, cssW, cssH);
+
+    // 1) Clear the whole viewport and paint the "void" outside the floor.
+    ctx.clearRect(0, 0, viewCssW, viewCssH);
+    ctx.fillStyle = COLORS.void;
+    ctx.fillRect(0, 0, viewCssW, viewCssH);
+
+    // 2) Enter WORLD space: translate by the pan then scale by the zoom.
+    // Every draw below is unchanged base-px math (world * cellPx); the
+    // transform turns it into screen = pan + world * cellPx * scale,
+    // exactly what worldToScreen() computes for hit-testing.
+    ctx.save();
+    ctx.translate(view.panX, view.panY);
+    ctx.scale(view.scale, view.scale);
+
+    // Floor background (the warehouse footprint itself).
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, cssW, cssH);
 
@@ -311,11 +362,16 @@
     ctx.fillText("I/O", ix + 9, iy + 4);
     ctx.restore();
 
-    // heatmap legend on top of everything (only when there is data)
-    if (state.showHeat) drawHeatLegend();
-
     // W3: calibration markers while the user is clicking the 2 points
+    // (world-anchored, so still inside the zoom/pan transform).
     drawCalibMarkers();
+
+    // 3) Leave WORLD space back to screen CSS pixels.
+    ctx.restore();
+
+    // heatmap legend: a fixed-size UI chip pinned to the viewport corner
+    // (screen space, so it never scales or drifts with zoom/pan).
+    if (state.showHeat) drawHeatLegend();
 
     updateBadges(viol, chains);
   }
@@ -410,7 +466,8 @@
     // Bottom-right corner: the top-left would sit on the inbound dock
     // in the starter and MRO layouts; bottom-right is usually floor.
     const w = 200, h = 40;
-    const x0 = GRID_W * cellPx - w - 8, y0 = GRID_H * cellPx - h - 8;
+    // Pinned to the viewport's bottom-right corner (screen space).
+    const x0 = viewCssW - w - 8, y0 = viewCssH - h - 8;
     ctx.save();
     ctx.globalAlpha = 0.92;
     ctx.fillStyle = COLORS.bg;
@@ -698,19 +755,38 @@
   // ================================================================
   // POINTER INTERACTION (place / select / drag)
   // ================================================================
-  function pointerCell(e) {
+  // Pointer position in canvas-local CSS px (accounts for any CSS scaling
+  // of the canvas box). This is the `screen` space of the transform.
+  function pointerScreen(e) {
     const rect = canvas.getBoundingClientRect();
-    const cx = ((e.clientX - rect.left) / rect.width) * GRID_W;
-    const cy = ((e.clientY - rect.top) / rect.height) * GRID_H;
-    return { cx, cy };
+    const kx = rect.width ? viewCssW / rect.width : 1;
+    const ky = rect.height ? viewCssH / rect.height : 1;
+    return { sx: (e.clientX - rect.left) * kx, sy: (e.clientY - rect.top) * ky };
+  }
+
+  // Pointer position in WORLD cells (fractional). Routed through the same
+  // screenToWorld helper the tests exercise, so hit-testing stays correct
+  // under any zoom/pan.
+  function pointerCell(e) {
+    const s = pointerScreen(e);
+    return screenToWorld(s.sx, s.sy);
   }
 
   let uDrag = null; // underlay align-drag: {mx0, my0, offMx0, offMy0}
+  let panDrag = null; // view pan-drag: {sx0, sy0, panX0, panY0}
+  let spaceHeld = false; // Space = temporary hand/pan mode
+
+  // Is this pointerdown a PAN gesture rather than an element edit? Middle
+  // mouse button, held Space, or the toolbar Pan toggle. Chosen so normal
+  // left-drag element moves are never hijacked.
+  function isPanGesture(e) {
+    return e.button === 1 || spaceHeld || state.panMode;
+  }
 
   canvas.addEventListener("pointerdown", (e) => {
-    const { cx, cy } = pointerCell(e);
     // Any direct canvas interaction clears a Compliance Check highlight.
     if (state.complianceHighlight) state.complianceHighlight = null;
+    const { cx, cy } = pointerCell(e);
     // W3 underlay modes take the pointer before element editing.
     if (state.underlayMode === "calibrate" && state.underlay.img) {
       underlayCalibClick(cx * CELL_M, cy * CELL_M);
@@ -719,6 +795,15 @@
     if (state.underlayMode === "align" && state.underlay.img) {
       uDrag = { mx0: cx * CELL_M, my0: cy * CELL_M, offMx0: state.underlay.offMx, offMy0: state.underlay.offMy };
       canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+    // Pan the view (does not touch any element).
+    if (isPanGesture(e)) {
+      const s = pointerScreen(e);
+      panDrag = { sx0: s.sx, sy0: s.sy, panX0: view.panX, panY0: view.panY };
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = "grabbing";
+      e.preventDefault();
       return;
     }
     if (state.activeTool) {
@@ -736,6 +821,14 @@
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    if (panDrag) {
+      const s = pointerScreen(e);
+      view.panX = panDrag.panX0 + (s.sx - panDrag.sx0);
+      view.panY = panDrag.panY0 + (s.sy - panDrag.sy0);
+      clampView();
+      render();
+      return;
+    }
     if (uDrag) {
       const { cx, cy } = pointerCell(e);
       state.underlay.offMx = uDrag.offMx0 + (cx * CELL_M - uDrag.mx0);
@@ -761,6 +854,14 @@
   });
 
   function endDrag(e) {
+    if (panDrag) {
+      panDrag = null;
+      if (e && canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+      canvas.style.cursor = viewCursor();
+      return;
+    }
     if (uDrag) {
       uDrag = null;
       if (e && canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
@@ -779,6 +880,140 @@
   }
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+
+  // ================================================================
+  // VIEW: ZOOM + PAN
+  // ================================================================
+  // The cursor to show when idle (grab when in a pan mode, else default).
+  function viewCursor() {
+    if (state.activeTool) return "copy";
+    if (spaceHeld || state.panMode) return "grab";
+    return "crosshair";
+  }
+
+  // Zoom by `factor`, keeping the WORLD point under (sx, sy) screen px
+  // pinned in place (zoom-to-cursor). Screen anchor defaults to centre.
+  function zoomAt(factor, sx, sy) {
+    if (sx == null) sx = viewCssW / 2;
+    if (sy == null) sy = viewCssH / 2;
+    const before = screenToWorld(sx, sy);
+    view.scale = V.clampScale(view.scale * factor);
+    const after = worldToScreen(before.cx, before.cy);
+    view.panX += sx - after.x;
+    view.panY += sy - after.y;
+    clampView();
+    render();
+    updateZoomBadge();
+  }
+
+  // Fit the whole warehouse into the viewport (centred, small margin).
+  function fitToFloor() {
+    const f = V.fitView(cellPx, GRID_W, GRID_H, viewCssW, viewCssH, 0.04);
+    view.scale = f.scale;
+    view.panX = f.panX;
+    view.panY = f.panY;
+    clampView();
+    render();
+    updateZoomBadge();
+  }
+
+  // Reset to 1:1 (100%) with the floor centred in the viewport.
+  function resetZoom() {
+    view.scale = 1;
+    const c = V.centerPan(view, GRID_W, GRID_H, viewCssW, viewCssH);
+    view.panX = c.panX;
+    view.panY = c.panY;
+    clampView();
+    render();
+    updateZoomBadge();
+  }
+
+  // Nudge the pan by a screen-px delta (arrow keys when nothing selected).
+  function panBy(dxPx, dyPx) {
+    view.panX += dxPx;
+    view.panY += dyPx;
+    clampView();
+    render();
+  }
+
+  function togglePanMode() {
+    state.panMode = !state.panMode;
+    const b = $("panBtn");
+    if (b) {
+      b.classList.toggle("active", state.panMode);
+      b.setAttribute("aria-pressed", String(state.panMode));
+    }
+    canvas.style.cursor = viewCursor();
+    status(state.panMode
+      ? "Pan mode on — drag the floor to move it. (Also: middle-mouse drag, or hold Space.)"
+      : "Pan mode off.");
+  }
+
+  function updateZoomBadge() {
+    const z = $("zoomBadge");
+    if (z) z.textContent = Math.round(view.scale * 100) + "%";
+  }
+
+  // Mouse-wheel zoom, centred on the cursor. Non-passive so we can stop
+  // the page from scrolling while zooming the floor.
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const s = pointerScreen(e);
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    zoomAt(factor, s.sx, s.sy);
+  }, { passive: false });
+
+  // ================================================================
+  // CONFIGURABLE FLOOR SIZE (bigger / smaller warehouse)
+  // ================================================================
+  // Set the warehouse footprint (metres = cells). Existing elements are
+  // kept honestly: an element off the new floor is moved back in, and one
+  // too large for the new floor has its footprint clipped to fit; an
+  // element that cannot fit at all is dropped. `refit` re-fits the view.
+  function setFloorSize(w, h, opts) {
+    const nf = V.normalizeFloor(w, h);
+    GRID_W = nf.gridW;
+    GRID_H = nf.gridH;
+    const kept = [];
+    for (const el of state.elements) {
+      const nw = Math.min(el.w, GRID_W);
+      const nd = Math.min(el.d, GRID_H);
+      if (nw < 1 || nd < 1) continue; // cannot fit on this floor
+      el.w = nw;
+      el.d = nd;
+      el.x = Math.max(0, Math.min(GRID_W - nw, el.x));
+      el.y = Math.max(0, Math.min(GRID_H - nd, el.y));
+      kept.push(el);
+    }
+    const dropped = state.elements.length - kept.length;
+    state.elements = kept;
+    if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) {
+      state.selectedId = null;
+    }
+    syncFloorInputs();
+    if (!opts || opts.refit !== false) fitToFloor(); else { clampView(); render(); }
+    renderProps();
+    scheduleSave();
+    return { gridW: GRID_W, gridH: GRID_H, dropped };
+  }
+
+  function syncFloorInputs() {
+    if ($("floorWInput")) $("floorWInput").value = GRID_W;
+    if ($("floorHInput")) $("floorHInput").value = GRID_H;
+  }
+
+  function applyFloorSizeFromInputs() {
+    const w = Number($("floorWInput") && $("floorWInput").value);
+    const h = Number($("floorHInput") && $("floorHInput").value);
+    const before = state.elements.length;
+    const res = setFloorSize(w, h);
+    const msg = "Warehouse set to " + res.gridW + " × " + res.gridH + " m." +
+      (res.dropped ? " " + res.dropped + " element(s) removed (no longer fit)." : "") +
+      " Zoom + pan to navigate — Fit shows the whole floor.";
+    status(msg);
+    if (res.dropped) toast(res.dropped + " element(s) didn't fit the smaller floor and were removed.", "warn");
+    else if (before) toast("Warehouse resized to " + res.gridW + " × " + res.gridH + " m.");
+  }
 
   function placeAt(type, cx, cy) {
     const def = ELEMENTS[type];
@@ -871,20 +1106,45 @@
 
   window.addEventListener("keydown", (e) => {
     if (e.target && /input|select|textarea/i.test(e.target.tagName)) return;
+    // Space = temporary hand/pan mode (release to resume editing). Leave
+    // Space alone when a button/link is focused so it can still activate.
+    if (e.key === " " || e.code === "Space") {
+      if (e.target && /button|^a$/i.test(e.target.tagName)) return;
+      if (!spaceHeld) { spaceHeld = true; canvas.style.cursor = viewCursor(); }
+      e.preventDefault(); // keep the page from scrolling
+      return;
+    }
     if (e.key === "Escape") { setTool(null); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && state.selectedId) {
       e.preventDefault();
       deleteSelected();
       return;
     }
-    if (ARROWS[e.key] && state.selectedId) {
+    if (ARROWS[e.key]) {
       e.preventDefault(); // keep the page from scrolling
-      nudgeSelected(ARROWS[e.key][0], ARROWS[e.key][1]);
+      if (state.selectedId) {
+        nudgeSelected(ARROWS[e.key][0], ARROWS[e.key][1]); // nudge the selection 1 m
+      } else {
+        // Nothing selected: arrow keys pan the view instead.
+        const step = 48;
+        panBy(-ARROWS[e.key][0] * step, -ARROWS[e.key][1] * step);
+      }
       return;
     }
+    // Zoom keyboard shortcuts: + / - / 0 (fit).
+    if (e.key === "+" || e.key === "=") { e.preventDefault(); zoomAt(1.2); return; }
+    if (e.key === "-" || e.key === "_") { e.preventDefault(); zoomAt(1 / 1.2); return; }
+    if (e.key === "0") { e.preventDefault(); fitToFloor(); return; }
     if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D") && state.selectedId) {
       e.preventDefault(); // browser bookmark shortcut
       duplicateSelected();
+    }
+  });
+
+  window.addEventListener("keyup", (e) => {
+    if (e.key === " " || e.code === "Space") {
+      spaceHeld = false;
+      if (!panDrag) canvas.style.cursor = viewCursor();
     }
   });
 
@@ -934,7 +1194,7 @@
       b.classList.toggle("active", b.dataset.type === type);
     });
     $("modeBadge").textContent = type ? "Mode: Placing " + shortLabel(type) : "Mode: Select";
-    canvas.style.cursor = type ? "copy" : "crosshair";
+    canvas.style.cursor = viewCursor();
     if (type) status(`Click the floor to place a ${ELEMENTS[type].label}. Esc to stop.`);
   }
 
@@ -1804,6 +2064,12 @@
 
   function deserialize(obj, source) {
     if (!obj || !Array.isArray(obj.elements)) throw new Error("Invalid layout data");
+    // Respect the layout's own warehouse size (may differ from 40 x 24);
+    // clamp it into the supported range. Elements are then kept in-bounds
+    // against THIS floor below.
+    const nf = V.normalizeFloor(numOr(obj.gridW, GRID_W), numOr(obj.gridH, GRID_H));
+    GRID_W = nf.gridW;
+    GRID_H = nf.gridH;
     const cleaned = [];
     let maxId = 0;
     for (const raw of obj.elements) {
@@ -1844,8 +2110,9 @@
       });
     }
     pushConfigToUI();
+    syncFloorInputs();
     renderProps();
-    render();
+    fitToFloor(); // show the whole (possibly resized) floor
     markKPIsStale(); // any displayed KPIs describe the previous layout
     if (source) status("Loaded layout from " + source + ".");
   }
@@ -2044,6 +2311,8 @@
   // ================================================================
   function demoLayout() {
     state.idCounter = 0;
+    GRID_W = V.FLOOR_DEFAULT_W; // the starter uses the classic 40 x 24 floor
+    GRID_H = V.FLOOR_DEFAULT_H;
     const mk = (type, x, y, w, d) => {
       const def = ELEMENTS[type];
       return { id: "el-" + ++state.idCounter, type, x, y, w: w || def.w, d: d || def.d };
@@ -2063,8 +2332,9 @@
     ];
     state.selectedId = null;
     state.complianceHighlight = null;
+    syncFloorInputs();
     renderProps();
-    render();
+    fitToFloor();
     scheduleSave();
     // The starter ships with its conveyor and stations deliberately
     // unconnected — say so, or the 5 chain warnings read as a bug.
@@ -2083,6 +2353,9 @@
     const p = D.PRESETS[presetId];
     if (!p) return;
     state.idCounter = 0;
+    const nf = V.normalizeFloor(numOr(p.gridW, V.FLOOR_DEFAULT_W), numOr(p.gridH, V.FLOOR_DEFAULT_H));
+    GRID_W = nf.gridW;
+    GRID_H = nf.gridH;
     state.elements = p.elements.map((e) => ({
       id: "el-" + ++state.idCounter,
       type: e.type, x: e.x, y: e.y, w: e.w, d: e.d,
@@ -2094,8 +2367,9 @@
       state.config = Object.assign(state.config, p.config);
     }
     pushConfigToUI();
+    syncFloorInputs();
     renderProps();
-    render();
+    fitToFloor();
     scheduleSave();
     status(`Loaded preset: ${p.label}. Independent + illustrative — not affiliated with or endorsed by any real company. Run the sim!`);
     toast("Preset loaded — see the flow arrows, then Run simulation.");
@@ -2213,6 +2487,14 @@
   function applyGeneratedLayout(gen, source) {
     state.genLayout = gen;
     state.idCounter = 0;
+    // Respect a generated/example layout's own floor size when it carries
+    // one (generator already builds against the current floor; examples
+    // ship 40 x 24). Clamped into the supported range.
+    if (gen.gridW != null && gen.gridH != null) {
+      const nf = V.normalizeFloor(gen.gridW, gen.gridH);
+      GRID_W = nf.gridW;
+      GRID_H = nf.gridH;
+    }
     state.elements = gen.elements.map((e) => {
       const n = parseInt(String(e.id).replace(/\D/g, ""), 10);
       if (!isNaN(n)) state.idCounter = Math.max(state.idCounter, n);
@@ -2233,8 +2515,9 @@
       });
     }
     pushConfigToUI();
+    syncFloorInputs();
     renderProps();
-    render();
+    fitToFloor(); // frame the whole generated/example floor
     scheduleSave();
     markKPIsStale();
   }
@@ -3118,6 +3401,27 @@
     $("compareBtn").addEventListener("click", runCompare);
     $("helpBtn").addEventListener("click", () => { $("onboard").hidden = false; });
     $("onboardClose").addEventListener("click", closeOnboard);
+    wireViewControls();
+  }
+
+  // Zoom / pan / floor-size controls in the canvas toolbar.
+  function wireViewControls() {
+    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+    on("zoomInBtn", () => zoomAt(1.2));
+    on("zoomOutBtn", () => zoomAt(1 / 1.2));
+    on("zoomFitBtn", fitToFloor);
+    on("zoom100Btn", resetZoom);
+    on("panBtn", togglePanMode);
+    on("floorApplyBtn", applyFloorSizeFromInputs);
+    // Enter in a floor-size field applies immediately.
+    ["floorWInput", "floorHInput"].forEach((id) => {
+      const el = $(id);
+      if (el) el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); applyFloorSizeFromInputs(); }
+      });
+    });
+    syncFloorInputs();
+    updateZoomBadge();
   }
 
   function boot() {

@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v17"; // P2 WMS Operations layer (wms.js + panel; index/app/styles changed)
+const CACHE_VERSION = "wt-v18"; // Zoom/pan viewport + configurable floor size (view.js added; index/app/styles changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
+  "./view.js",
   "./domain.js",
   "./tiers.js",
   "./simulation.js",
