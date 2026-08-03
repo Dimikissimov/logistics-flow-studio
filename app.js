@@ -329,6 +329,10 @@
     // pick-traffic heatmap (under the elements — pickers walk the aisles)
     if (state.showHeat) drawHeat();
 
+    // Theme for the per-type shape glyphs (WT.shapes is theme-aware). Read
+    // once per frame (not per element) to keep the draw loop allocation-lean.
+    const themeName = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+
     // elements
     for (const e of state.elements) {
       const def = ELEMENTS[e.type];
@@ -340,7 +344,17 @@
       ctx.lineWidth = e.id === state.selectedId ? 3 : 1.5;
       ctx.strokeStyle = e.id === state.selectedId ? COLORS.sel : def.color;
       ctx.stroke();
-      drawGlyph(e, def, px, py, pw, ph);
+      // Distinct top-down glyph from the single shape registry (WT.shapes);
+      // fall back to the built-in drawGlyph if the type has no custom shape
+      // or the module is absent (nothing breaks). `lod` = on-screen px/cell.
+      if (WT.shapes && WT.shapes.has(e.type)) {
+        WT.shapes.draw2D(ctx, e.type, {
+          x: px, y: py, w: pw, d: ph,
+          cellPx: cellPx, color: def.color, theme: themeName, lod: cellPx * view.scale,
+        });
+      } else {
+        drawGlyph(e, def, px, py, pw, ph);
+      }
 
       // label
       const fontSize = Math.max(9, Math.min(13, cellPx * 0.62));

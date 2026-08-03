@@ -169,6 +169,18 @@
   // Face shade multipliers (top brightest, then right, then left).
   const FACE = { top: 1.14, right: 0.82, left: 0.6 };
 
+  // Is a #rrggbb background dark? Used to pass the current theme to the
+  // per-type 3D shape registry (WT.shapes) so its forms read on both
+  // themes. Rec.601 luma; defaults to light on unparseable input.
+  function isDarkBg(hex) {
+    const h = String(hex || "#ffffff").replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    if (!isFinite(r) || !isFinite(g) || !isFinite(b)) return false;
+    return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+  }
+
   /* ==================================================================
    * RENDERER HELPERS (canvas). Only called from the app's render loop;
    * NOT exercised by the headless harness (no DOM in the sandbox).
@@ -275,16 +287,29 @@
     // ---- Elements: extruded blocks, back-to-front ---------------------
     const ordered = sortByDepth(o.elements || []);
     const labelFn = typeof o.shortLabel === "function" ? o.shortLabel : null;
+    const theme = isDarkBg(colors.bg) ? "dark" : "light";
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (const e of ordered) {
       const def = defs[e.type] || {};
       const h = elementHeight(e.type);
-      drawBox(ctx, P, e.x, e.y, e.w, e.d, h, def.color || "#8b5cf6", {
-        selected: e.id === o.selectedId,
-        selColor: colors.sel,
-      });
+      const color = def.color || "#8b5cf6";
+      // Distinct isometric FORM from the single shape registry (WT.shapes),
+      // using the SAME per-type height (domain heightM via elementHeight).
+      // Fall back to the plain extruded box if the type has no custom form
+      // or the module is absent - the extrusion still works, nothing breaks.
+      if (WT.shapes && WT.shapes.has(e.type)) {
+        WT.shapes.draw3D(ctx, e.type, P, {
+          cx: e.x, cy: e.y, w: e.w, d: e.d, heightM: h, color: color, theme: theme,
+          selected: e.id === o.selectedId, selColor: colors.sel,
+        });
+      } else {
+        drawBox(ctx, P, e.x, e.y, e.w, e.d, h, color, {
+          selected: e.id === o.selectedId,
+          selColor: colors.sel,
+        });
+      }
       // Optional short label on the top face for bigger footprints.
       if (labelFn && e.w >= 3 && e.d >= 1) {
         const mid = P(e.x + e.w / 2, e.y + e.d / 2, h);

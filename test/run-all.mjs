@@ -230,6 +230,22 @@
  *      heuristic / NOT a DES engine / NOT measured / NOT a certification /
  *      overflow + starvation honesty labels. The DOM readout is added by
  *      app.js and not headless-testable; the pure model behind it is covered.
+ *  27. verify_shapes.js   - Distinct 2D glyph + 3D form per object type (v1.4):
+ *      WT.shapes is the SINGLE per-type shape registry (has/draw2D/draw3D/
+ *      ICONS/meta) both renderers route through. Asserts has() is true for
+ *      EVERY domain element type (2D AND 3D defined - no type left a plain
+ *      rect), the registry covers EXACTLY the domain types (no orphans),
+ *      meta + ICONS cover them with non-empty descriptions/fns, and - the key
+ *      gate for a pure-draw feature that can't be pixel-tested headlessly - a
+ *      MOCK-CONTEXT smoke test that draws every type in BOTH 2D and 3D, in
+ *      light + dark, at small AND large scale (exercising the LOD path), with
+ *      NO throw and NO non-finite coordinate; the LOD path is distinct (the
+ *      full glyph draws more than the zoomed-out icon), the 3D forms use the
+ *      domain heightM (a taller element rises on screen for every type),
+ *      neither draw mutates its inputs, unknown types are safe (false, no
+ *      throw), and the illustrative / NOT CAD / NOT BIM / no-brands honesty
+ *      labels are present. The live pixels are verified in the browser; every
+ *      draw PATH is covered here.
  *
  * Usage:  node test/run-all.mjs
  * ASCII-only output. Exit code 0 = every harness green.
@@ -266,6 +282,7 @@ const HARNESSES = [
   { name: "Save / load named scenarios (verify_scenarios.js)", args: ["verify_scenarios.js"] },
   { name: "Scenario A/B compare (verify_compare.js)", args: ["verify_compare.js"] },
   { name: "Live order pool (verify_orderpool.js)", args: ["verify_orderpool.js"] },
+  { name: "Per-type 2D+3D shape registry (verify_shapes.js)", args: ["verify_shapes.js"] },
   { name: "offline guard (tools/offline-guard.mjs)", args: [path.join("tools", "offline-guard.mjs")] },
 ];
 

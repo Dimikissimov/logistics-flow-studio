@@ -6,6 +6,65 @@ seeded teaching heuristic unless you import your own data** — informed by publ
 standards (ISO 22400, DIN 15185, ASR, EN, VDI), not a certification and not a
 measurement of a real site.
 
+## [1.4.0] — 2026-08-03
+
+### Added
+- **Distinct 2D + 3D object representations.** Every warehouse object type
+  now has its **own recognizable schematic** in both views instead of a
+  coloured rectangle (top-down) and a plain height-extruded box (2.5D). A new
+  **single per-type shape registry** (`shapes.js` → `WT.shapes`, exposing
+  `has / draw2D / draw3D / ICONS / meta`) is the **one source of truth** both
+  renderers route through:
+  - **Top-down glyphs** (`draw2D`): selective racking → shelf-bay grid;
+    drive-in → deep lanes + entry depth arrows; double-deep → paired bays +
+    two-deep divider; push-back → nested chevrons; pallet-flow/carton-flow →
+    roller dots + FIFO flow chevrons; mobile racking → base rail + wheels;
+    cantilever → column + projecting arms; AS/RS → tall-rack hatch + crane
+    aisle + trolley; shuttle → channels + carts + lift; mezzanine → dashed
+    platform + posts + stairs; dock-in/out → door notch + in/out arrow;
+    staging → dashed holding area; conveyor → belt rollers + direction;
+    push/pull/pack stations → workbench + flow arrow / parcel; block-stack →
+    stacked-square pattern; RGV → twin rails + cart; AGV → guide path + robot.
+  - **Isometric forms** (`draw3D`): open, **see-through rack frames** (uprights
+    + beam levels, not a solid block); a **tall crane tower** for AS/RS; a
+    **raised deck on legs** for the mezzanine; a **low belt bed** with rollers
+    for the conveyor; **bench furniture** for the stations; small **floor
+    vehicles** for RGV/AGV; a **door opening in a low wall** for docks;
+    **stacked unit cubes** for block-stack; a **low outlined pad** for staging.
+    The 3D forms reuse the **same per-type height** (`domain.heightM` via
+    `iso.elementHeight`) the IFC export and the iso projection already agree on.
+- Both renderers are wired through `WT.shapes` **fallback-safe**: the top-down
+  loop (`app.js`) and the iso scene (`iso.js`) fall back to the previous rect /
+  extruded-box draw if a type has no custom shape or the module is absent, so
+  nothing breaks. The heatmap, aisle-violation, chain-arrow, compliance,
+  reserved-zone, flow-MU and order-pool overlays, selection highlight, labels
+  and hit-testing are **unchanged**.
+- A **level-of-detail** path keeps large layouts smooth and legible: when a
+  footprint is small on screen the glyph simplifies to the already-tinted
+  footprint plus a tiny centred icon; at high zoom the full glyph is crisp.
+  The module is **pure and deterministic** (a canvas `ctx` + plain geometry/
+  colour in, drawing out — no app state, no per-call input mutation), theme-
+  aware (light + dark) and **offline** (no external assets).
+- These are **illustrative, recognizable schematic** glyphs and forms with
+  heights taken from the domain model's **assumed** `heightM` — **not** CAD,
+  **not** BIM, **not** a survey and **not** measured geometry. The real
+  BIM/geometry path remains the separate **IFC export** (`ifc.js`). No real
+  brands, logos or trademarked shapes.
+
+### Engineering
+- 27 headless verification harnesses via `node test/run-all.mjs` (the new
+  `verify_shapes.js`, 13 checks). Because the pixels of a pure-draw feature
+  can't be verified headlessly, the harness runs a **mock-context smoke test**
+  that draws **every** object type in **both 2D and 3D**, in **light + dark**,
+  at **small + large** scale (exercising the LOD path), asserting **no
+  non-finite coordinate** and **no throw**; it also asserts `has()` is true for
+  every domain type (2D **and** 3D defined — no type left a plain rect), the
+  registry covers **exactly** the domain types (no orphans), the 3D forms use
+  the domain `heightM` (a taller element rises on screen), neither draw mutates
+  its inputs, unknown types are safe, and the honesty labels are present. All
+  26 pre-existing harnesses still pass unchanged. Service-worker cache bumped
+  to `wt-v33` (precaching `shapes.js`).
+
 ## [1.3.0] — 2026-08-03
 
 ### Added

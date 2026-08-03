@@ -6,7 +6,7 @@
  * at runtime). Bump CACHE_VERSION when shipping new asset content so
  * clients pick up the update.
  * ===================================================================== */
-const CACHE_VERSION = "wt-v32"; // v1.3: Live order pool (orderpool.js -> WT.orderpool, a pure/deterministic bounded order-pool model mirroring the Siemens generateOrders -> DT_tempOrders(SizeOrderPool) -> M_selectOrders -> consumed spine). Driven from the SAME rAF loop that steps WT.flowsim: selections align with MUs entering picking, completions with MUs shipped; app.js adds a compact "Order pool" readout (backlog + fill bar, generated/selected/completed, in/out rates, starving/saturating flag, backlog sparkline). Count-conserving (generated == inPool + inFlightSelected + completed + dropped), overflow honestly dropped. New verify_orderpool.js harness (orderpool/app/index/styles/sw changed)
+const CACHE_VERSION = "wt-v33"; // v1.4: Distinct 2D + 3D object representations (shapes.js -> WT.shapes, the SINGLE per-type shape registry: has/draw2D/draw3D/ICONS/meta). Every warehouse object type now has a distinct, recognizable top-down GLYPH (shelf-bay grids, depth/flow chevrons, cantilever arms, AS/RS crane-aisle hatch, shuttle channels, mezzanine platform, dock notches, conveyor rollers, station benches, RGV/AGV vehicles, block-stack pattern) AND a distinct ISOMETRIC form (open see-through rack frames, tall crane tower, raised deck on legs, low belt bed, bench furniture, floor vehicles, stacked cubes) - reused by BOTH renderers (app.js draw2D + iso.js draw3D route through WT.shapes, fallback-safe to the old rect/box). LOD path keeps large layouts fast + legible at any zoom; iso forms reuse the domain heightM (single source of truth with the IFC export). Illustrative schematic, NOT CAD/BIM. New verify_shapes.js harness (shapes/app/iso/index/sw changed)
 const CACHE_NAME = "warehousetwin-" + CACHE_VERSION;
 
 // The complete offline app shell. All local, no external hosts.
@@ -34,6 +34,7 @@ const APP_SHELL = [
   "./kpicharts.js",
   "./wmsdata.js",
   "./iso.js",
+  "./shapes.js",
   "./storage.js",
   "./report.js",
   "./demo.js",
